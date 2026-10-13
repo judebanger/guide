@@ -14,6 +14,7 @@ artifacts/
 designs/
   <design>-<id>/                       Design artifacts, kept whole, + meta.json
 hooks/   Claude Code hooks that record each turn
+site/    builder for the archive website (GitHub Pages)
 sync/    scripts used by the hourly artifact sync
 lib/     shared helpers        bin/   manual tools        .sync/   sync state
 ```
@@ -47,6 +48,19 @@ project during that turn are copied into `artifacts/<type>/<chat>/`.
 To keep the clone elsewhere, set `GUIDE_REPO=/path/to/guide`, or run
 `install.py` from that clone. Remove with `python3 hooks/install.py --uninstall`.
 Requires `python3` and `git` with push access to this repo.
+
+## Archive website
+
+**https://judebanger.github.io/guide/** — a wayback-style view of this repo,
+rebuilt by `.github/workflows/pages.yml` after every push:
+
+- **Timeline**: every prompt with its timestamp (in your local time), Claude's
+  reply, and the files that turn changed, with diffs.
+- **Designs**: each design as it looked after every sync, page by page, with
+  changed and new pages outlined; step through versions along the top.
+- **Files**: every file's change history, linking to the file as it was then.
+
+Build it locally with `python3 site/build.py` (output in `_site/`).
 
 ## Going back in time
 
