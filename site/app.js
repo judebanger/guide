@@ -77,6 +77,10 @@
     if (e.key === "ArrowLeft") show(current - 1, true);
     if (e.key === "ArrowRight") show(current + 1, true);
   });
+  window.addEventListener("hashchange", function () {
+    var h = parseInt(location.hash.slice(1), 10);
+    if (h > 0) { show(h - 1, false); window.scrollTo(0, 0); }
+  });
   var fromHash = parseInt(location.hash.slice(1), 10);
   show(fromHash > 0 ? fromHash - 1 : +panels.dataset.default, false);
 })();

@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Record a turn by hand (used from claude.ai chats, where there are no hooks).
 
-    python3 bin/record_turn.py --prompt-file p.txt --response-file r.md [--file out.pdf ...] [--when ISO] [--push]
+    python3 bin/record_turn.py --prompt-file p.txt --response-file r.md [--file out.pdf ...] [--when ISO]
+        [--source claude-ai|cowork] [--project NAME] [--session ID] [--artifact URL] [--push]
+
+--artifact: the claude.ai link of the artifact or design this turn worked on; the
+archive site then shows the prompt on that design's timeline too.
 """
 import argparse
 import datetime
@@ -22,13 +26,14 @@ ap.add_argument("--source", default="claude-ai")
 ap.add_argument("--project", default="")
 ap.add_argument("--session", default="")
 ap.add_argument("--when")
+ap.add_argument("--artifact", default="")
 ap.add_argument("--push", action="store_true")
 a = ap.parse_args()
 
 read = lambda p: open(p, encoding="utf-8").read()  # noqa: E731
 when = datetime.datetime.fromisoformat(a.when) if a.when else None
 made = record_turn(REPO, read(a.prompt_file), read(a.response_file), a.file, source=a.source,
-                   project=a.project, session=a.session, when=when)
+                   project=a.project, session=a.session, when=when, artifact=a.artifact)
 print("committed" if made else "nothing to commit")
 if made and a.push:
     push_in_background(REPO)

@@ -160,7 +160,7 @@ def load_commits():
 
 
 def classify(c):
-    turn_files = [p for s, p in c["changes"] if s in "AM" and re.match(r"artifacts/text/(claude-code|claude-ai)-[^/]+/[^/]+\.md$", p)]
+    turn_files = [p for s, p in c["changes"] if s in "AM" and re.match(r"artifacts/text/(claude-code|claude-ai|cowork)-[^/]+/[^/]+\.md$", p)]
     if c["subject"].startswith("sync artifacts"):
         return "sync", None
     if turn_files:
@@ -240,6 +240,8 @@ def when(iso, cls="t"):
     return f'<time class="{cls}" datetime="{esc(iso)}" title="{esc(iso)}">{esc(iso.replace("T", " ")[:16])}</time>'
 
 
+SOURCE_LABEL = {"claude-code": "Claude Code", "claude-ai": "claude.ai", "cowork": "Cowork"}
+sessions_titles = {}
 IMG_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".avif"}
 TEXT_EXT = {".md", ".txt", ".csv", ".json", ".py", ".js", ".ts", ".css", ".yml", ".yaml", ".sh"}
 
@@ -310,10 +312,10 @@ def main():
             meta, prompt, response = parse_turn(git("show", f"{c['sha']}:{turn_path}"))
             arts = [p for s, p in c["changes"] if s != "D" and p != turn_path and not is_noise(p)
                     and re.match(rf"artifacts/[^/]+/{re.escape(chat)}/", p)]
-            s = sessions.setdefault(chat, dict(kind="chat", id=chat, steps=[],
-                                               source="Claude Code" if chat.startswith("claude-code") else "claude.ai"))
-            s["steps"].append(dict(sha=c["sha"], date=meta.get("time") or c["date"],
-                                   prompt=prompt or c["subject"], response=response, arts=arts))
+            s = sessions.setdefault(chat, dict(kind="chat", id=chat, steps=[], source=next((v for k, v in SOURCE_LABEL.items() if chat.startswith(k + "-")), "Chat")))
+            s["steps"].append(dict(type="prompt", sha=c["sha"], date=meta.get("time") or c["date"], chat=chat,
+                                   prompt=prompt or c["subject"], response=response, arts=arts,
+                                   artifact=meta.get("artifact", "").rstrip("/").rsplit("/", 1)[-1]))
         for slug in design_slugs_touched(c):
             title, boards, edited = design_snapshot(c["sha"], slug, os.path.join(OUT, "blob"))
             s = sessions.setdefault("design-" + slug, dict(kind="design", id="design-" + slug, steps=[], source="Design"))
@@ -324,14 +326,36 @@ def main():
             delta = [("new" if b["name"] not in pb else "changed", b, pb.get(b["name"]))
                      for b in boards if b["name"] not in pb or pb[b["name"]]["blob"] != b["blob"]]
             delta += [("removed", None, pb[x]) for x in pb if x not in names]
-            s["steps"].append(dict(sha=c["sha"], date=c["date"], edited=edited, boards=boards,
+            s["steps"].append(dict(type="version", sha=c["sha"], date=c["date"], edited=edited, boards=boards,
                                    delta=delta, first=prev is None))
 
+    # Prompts recorded with an artifact link also go on that design's timeline.
+    try:
+        synced = json.loads(git("show", "HEAD:.sync/state.json")).get("artifacts", {})
+    except Exception:
+        synced = {}
+    for chat_s in [x for x in sessions.values() if x["kind"] == "chat"]:
+        for st in chat_s["steps"]:
+            slug = synced.get(st["artifact"], {}).get("slug") if st["artifact"] else None
+            if slug and "design-" + slug in sessions:
+                sessions["design-" + slug]["steps"].append(dict(st, linked=True))
+    for x in sessions.values():
+        x["steps"].sort(key=lambda st: st["date"])
+        v = 0
+        for st in x["steps"]:
+            if st["type"] == "version":
+                v += 1
+                st["vno"] = v
+        x["nversions"] = v
+        x["nprompts"] = sum(1 for st in x["steps"] if st["type"] == "prompt")
+
+    for x in sessions.values():
+        if x["kind"] == "chat":
+            x["title"] = session_title([st["prompt"] for st in x["steps"] if not st.get("linked")])
+        sessions_titles[x["id"]] = x["title"]
     cards = []
     for sid, s in sessions.items():
         steps = s["steps"]
-        if s["kind"] == "chat":
-            s["title"] = session_title([x["prompt"] for x in steps])
         ticks, panels = [], []
         last_day = None
         for n, st in enumerate(steps):
@@ -339,7 +363,7 @@ def main():
             if day != last_day:
                 ticks.append(f'<li class=daymark>{when(day + "T12:00:00Z", "t day")}</li>')
                 last_day = day
-            if s["kind"] == "chat":
+            if st["type"] == "prompt":
                 label = re.sub(r"\s+", " ", st["prompt"]).strip()
                 label = esc(label[:60] + ("…" if len(label) > 60 else ""))
                 extra = f'<span class=n>{len(st["arts"])} artifact{"" if len(st["arts"]) == 1 else "s"}</span>' if st["arts"] else ""
@@ -347,13 +371,13 @@ def main():
                 cnt = {k: sum(1 for x in st["delta"] if x[0] == k) for k in ("changed", "new", "removed")}
                 label = "first backup" if st["first"] else (", ".join(f"{v} {k}" for k, v in cnt.items() if v) or "no visible change")
                 extra = f'<span class=n>{len(st["boards"])} pages</span>'
-            ticks.append(f'<li><button type=button class=tick data-step="{n}" aria-controls="step-{n}">'
+            ticks.append(f'<li><button type=button class="tick {st["type"]}" data-step="{n}" aria-controls="step-{n}">'
                          f'{when(st["date"], "t time")}<span class=lbl>{label}</span>{extra}</button></li>')
             panels.append(render_step(s, n, st))
         latest = steps[-1]
         rng = f'{when(steps[0]["date"])} – {when(latest["date"])}' if len(steps) > 1 else when(latest["date"])
-        unit = "prompt" if s["kind"] == "chat" else "version"
-        meta = f'{s["source"]} · {len(steps)} {unit}{"" if len(steps) == 1 else "s"} · {rng}'
+        counts = " · ".join(f'{k} {u}{"" if k == 1 else "s"}' for k, u in ((s["nversions"], "version"), (s["nprompts"], "prompt")) if k)
+        meta = f'{s["source"]} · {counts} · {rng}'
         body = (f'<p class=crumb><a href="../index.html">← All sessions</a></p>'
                 f'<h1 class=title>{esc(s["title"])}</h1><p class=meta>{meta}</p>'
                 f'<div class=trackwrap><button type=button class=nav data-dir=-1 aria-label="Earlier">‹</button>'
@@ -363,17 +387,18 @@ def main():
         with open(os.path.join(OUT, "s", sid + ".html"), "w", encoding="utf-8") as f:
             f.write(page(s["title"], body, 1))
 
-        if s["kind"] == "design" and latest["boards"]:
-            b0 = latest["boards"][0]
+        last_v = next((st for st in reversed(steps) if st["type"] == "version"), None)
+        if last_v and last_v["boards"]:
+            b0 = last_v["boards"][0]
             thumb = (f'<span class="thumb board" style="--w:{b0["w"]};--h:{b0["h"]}"><span class=frame>'
                      f'<iframe loading=lazy src="blob/{b0["blob"]}.html" tabindex=-1 title=""></iframe></span></span>')
         else:
-            first_art = next((p for st in steps for p in st["arts"] if os.path.splitext(p)[1].lower() in IMG_EXT), None)
-            thumb = (f'<span class="thumb pic"><img loading=lazy src="{write_blob(next(st["sha"] for st in steps if first_art in st["arts"]), first_art)[0]}" alt=""></span>'
+            first_art = next((p for st in steps for p in st.get("arts", []) if os.path.splitext(p)[1].lower() in IMG_EXT), None)
+            thumb = (f'<span class="thumb pic"><img loading=lazy src="{write_blob(next(st["sha"] for st in steps if first_art in st.get("arts", [])), first_art)[0]}" alt=""></span>'
                      if first_art else f'<span class="thumb chat" aria-hidden=true>{len(steps)}</span>')
         cards.append((latest["date"], f'<a class=session href="s/{sid}.html">{thumb}<span class=info>'
                                       f'<span class="src src-{s["kind"]}">{s["source"]}</span>'
-                                      f'<b>{esc(s["title"])}</b><span class=muted>{len(steps)} {unit}{"" if len(steps) == 1 else "s"} · last {when(latest["date"])}</span>'
+                                      f'<b>{esc(s["title"])}</b><span class=muted>{counts} · last {when(latest["date"])}</span>'
                                       f'</span></a>'))
 
     cards.sort(key=lambda x: x[0], reverse=True)
@@ -388,19 +413,24 @@ def main():
 def render_step(s, n, st):
     up = "../"
     src = f'<a class=srclink href="{REPO_URL}/commit/{st["sha"]}">source ↗</a>'
-    if s["kind"] == "chat":
-        out = [f'<p class=meta>{when(st["date"])} · prompt {n + 1} of {len(s["steps"])} · {src}</p>',
+    if st["type"] == "prompt":
+        where = (f' · from <a href="{st["chat"]}.html">{esc(sessions_titles.get(st["chat"], st["chat"]))}</a>' if st.get("linked") else "")
+        out = [f'<p class=meta>{when(st["date"])} · prompt{where} · {src}</p>',
                f'<section class=prompt><div class=md>{markdown(st["prompt"])}</div></section>']
-        if st["arts"]:
+        if st.get("linked"):
+            nxt = next((k for k in range(n + 1, len(s["steps"])) if s["steps"][k]["type"] == "version"), None)
+            out.append(f'<p><a href="#{nxt + 1}">See what this changed in the next backup →</a></p>' if nxt is not None
+                       else '<p class=muted>The pages this changed will show up after the next backup.</p>')
+        if st["arts"] and not st.get("linked"):
             out.append(f'<h2>Artifacts from this prompt</h2><div class=arts>'
                        + "".join(artifact_card(st["sha"], p, up) for p in st["arts"]) + "</div>")
-        else:
+        elif not st.get("linked"):
             out.append('<p class=muted>No artifacts were made in this prompt.</p>')
         if st["response"]:
             out.append(f'<details class=reply><summary>Claude\'s reply</summary><div class=md>{markdown(st["response"])}</div></details>')
     else:
         edited = f'edited {when(st["edited"])} · backed up {when(st["date"])}' if st["edited"] else f'backed up {when(st["date"])}'
-        out = [f'<p class=meta>Version {n + 1} of {len(s["steps"])} · {edited} · {src}</p>']
+        out = [f'<p class=meta>Version {st["vno"]} of {s["nversions"]} · {edited} · {src}</p>']
         if st["first"]:
             out.append(f'<h2>All {len(st["boards"])} pages</h2><div class=boards>'
                        + "".join(board_card(b, up) for b in st["boards"]) + "</div>")

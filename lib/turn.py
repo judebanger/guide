@@ -16,9 +16,10 @@ from guide import commit, media_type, slugify, subject_and_body
 MAX_FILE_BYTES = 50 * 1024 * 1024
 
 
-def record_turn(repo, prompt, response, files=(), source="claude-code", project="", session="", when=None, base=None):
+def record_turn(repo, prompt, response, files=(), source="claude-code", project="", session="", when=None, base=None, artifact=""):
     """files: paths of things produced this turn. Text files are skipped (the reply is the text);
     everything else is copied to artifacts/<media>/<chat>/, keeping its path relative to `base`.
+    artifact: claude.ai link of the artifact/design this turn worked on (puts the prompt on its timeline).
     Returns True if a commit was made."""
     when = when or datetime.datetime.now().astimezone()
     stamp = when.strftime("%Y-%m-%d-%H%M%S")
@@ -44,6 +45,8 @@ def record_turn(repo, prompt, response, files=(), source="claude-code", project=
     text_path = os.path.join(text_dir, name + ".md")
     with open(text_path, "w", encoding="utf-8") as f:
         f.write(f"---\nsource: {source}\nproject: {project}\nsession: {session}\ntime: {when.isoformat(timespec='seconds')}\n")
+        if artifact:
+            f.write(f"artifact: {artifact}\n")
         if saved:
             f.write("files:\n" + "".join(f"  - {p}\n" for p in saved))
         f.write("---\n\n## Prompt\n\n" + prompt.strip() + "\n\n## Response\n\n" + (response.strip() or "_(no text)_") + "\n")

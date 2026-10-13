@@ -119,3 +119,5 @@ details[open] > summary { margin-bottom: 8px; }
   .nav { width: 32px; }
   .boards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 }
+.tick.prompt { background: var(--prompt); border-color: var(--prompt-line); }
+.tick.prompt[aria-current] { background: var(--accent); border-color: var(--accent); }
