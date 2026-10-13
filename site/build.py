@@ -341,13 +341,25 @@ def main():
                 sessions["design-" + slug]["steps"].append(dict(st, linked=True))
     for x in sessions.values():
         x["steps"].sort(key=lambda st: st["date"])
+        if x["kind"] == "design":
+            # A prompt belongs to the backup that captured its result: fold each linked
+            # prompt into the next version, so one point = prompt(s) + before → after.
+            folded, waiting = [], []
+            for st in x["steps"]:
+                if st["type"] == "prompt":
+                    waiting.append(st)
+                else:
+                    st["prompts"] = waiting
+                    waiting = []
+                    folded.append(st)
+            x["steps"] = folded + waiting   # prompts after the last backup stay as their own points
         v = 0
         for st in x["steps"]:
             if st["type"] == "version":
                 v += 1
                 st["vno"] = v
         x["nversions"] = v
-        x["nprompts"] = sum(1 for st in x["steps"] if st["type"] == "prompt")
+        x["nprompts"] = sum(1 if st["type"] == "prompt" else len(st.get("prompts", [])) for st in x["steps"])
 
     for x in sessions.values():
         if x["kind"] == "chat":
@@ -369,9 +381,16 @@ def main():
                 extra = f'<span class=n>{len(st["arts"])} artifact{"" if len(st["arts"]) == 1 else "s"}</span>' if st["arts"] else ""
             else:
                 cnt = {k: sum(1 for x in st["delta"] if x[0] == k) for k in ("changed", "new", "removed")}
-                label = "first backup" if st["first"] else (", ".join(f"{v} {k}" for k, v in cnt.items() if v) or "no visible change")
-                extra = f'<span class=n>{len(st["boards"])} pages</span>'
-            ticks.append(f'<li><button type=button class="tick {st["type"]}" data-step="{n}" aria-controls="step-{n}">'
+                change = "first backup" if st["first"] else (", ".join(f"{v} {k}" for k, v in cnt.items() if v) or "no visible change")
+                if st.get("prompts"):
+                    label = re.sub(r"\s+", " ", st["prompts"][-1]["prompt"]).strip()
+                    label = esc(label[:60] + ("…" if len(label) > 60 else ""))
+                    extra = f'<span class=n>{change}</span>'
+                else:
+                    label = change
+                    extra = f'<span class=n>{len(st["boards"])} pages · no prompt</span>'
+            kind_cls = st["type"] + (" prompted" if st.get("prompts") else "")
+            ticks.append(f'<li><button type=button class="tick {kind_cls}" data-step="{n}" aria-controls="step-{n}">'
                          f'{when(st["date"], "t time")}<span class=lbl>{label}</span>{extra}</button></li>')
             panels.append(render_step(s, n, st))
         latest = steps[-1]
@@ -431,6 +450,15 @@ def render_step(s, n, st):
     else:
         edited = f'edited {when(st["edited"])} · backed up {when(st["date"])}' if st["edited"] else f'backed up {when(st["date"])}'
         out = [f'<p class=meta>Version {st["vno"]} of {s["nversions"]} · {edited} · {src}</p>']
+        for pr in st.get("prompts", []):
+            chat_link = f'<a href="{pr["chat"]}.html">{esc(sessions_titles.get(pr["chat"], pr["chat"]))}</a>'
+            out.append(f'<section class=prompt><p class=meta>Prompt · {when(pr["date"])} · from {chat_link}</p>'
+                       f'<div class=md>{markdown(pr["prompt"])}</div>'
+                       + (f'<details class=reply><summary>Claude\'s reply</summary><div class=md>{markdown(pr["response"])}</div></details>' if pr["response"] else "")
+                       + '</section>')
+        if not st.get("prompts") and not st["first"]:
+            out.append('<p class="noprompt">No prompt was recorded for this change. Either the chat that made it '
+                       'wasn\'t saving its turns, or the pages were edited by hand on the canvas.</p>')
         if st["first"]:
             out.append(f'<h2>All {len(st["boards"])} pages</h2><div class=boards>'
                        + "".join(board_card(b, up) for b in st["boards"]) + "</div>")

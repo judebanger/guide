@@ -121,3 +121,8 @@ details[open] > summary { margin-bottom: 8px; }
 }
 .tick.prompt { background: var(--prompt); border-color: var(--prompt-line); }
 .tick.prompt[aria-current] { background: var(--accent); border-color: var(--accent); }
+.tick.prompted { background: var(--prompt); border-color: var(--prompt-line); }
+.tick.prompted[aria-current] { background: var(--accent); border-color: var(--accent); }
+.step .prompt { margin-bottom: 14px; }
+.step .prompt > .meta { margin: 8px 0 0; font-size: 13px; }
+.noprompt { border: 1px dashed var(--line); border-radius: 10px; padding: 10px 14px; color: var(--muted); font-size: 14px; }
