@@ -240,13 +240,15 @@ def design_snapshot(sha, slug, blobs_dir):
         bm = boards_meta.get(name, {})
         boards.append(dict(name=name, blob=blob, title=bm.get("title") or name,
                            w=int(bm.get("w") or 794), h=int(bm.get("h") or 1123)))
-    title = canvas.get("title") or slug
+    title, edited = canvas.get("title") or slug, ""
     try:
         meta = json.loads(git("show", f"{sha}:designs/{slug}/meta.json"))
         title = meta.get("title") or title
+        if "T" in str(meta.get("updated", "")):
+            edited = meta["updated"]
     except Exception:
         pass
-    return title, boards
+    return title, boards, edited
 
 
 # ---------------------------------------------------------------- page shell
@@ -309,8 +311,8 @@ def main():
         for s, p in c["changes"]:
             file_hist.setdefault(p, []).append((c, s))
         for slug in design_slugs_touched(c):
-            title, boards = design_snapshot(c["sha"], slug, os.path.join(OUT, "blob"))
-            design_versions.setdefault(slug, []).append(dict(commit=c, title=title, boards=boards))
+            title, boards, edited = design_snapshot(c["sha"], slug, os.path.join(OUT, "blob"))
+            design_versions.setdefault(slug, []).append(dict(commit=c, title=title, boards=boards, edited=edited))
             c.setdefault("designs", []).append(slug)
 
     # ---- commit pages
@@ -368,7 +370,9 @@ def main():
                 f'<a href="{x["commit"]["sha"][:12]}.html"{" aria-current=page" if x is v else ""}>{when(x["commit"]["date"], "t short")}</a>'
                 for x in versions)
             body = (f'<h1 class=title>{esc(v["title"])}</h1>'
-                    f'<p class=meta>Version {n + 1} of {len(versions)} · {when(c["date"])} · '
+                    f'<p class=meta>Version {n + 1} of {len(versions)} · '
+                    + (f'last edited {when(v["edited"])}, backed up {when(c["date"])}' if v["edited"] else f'backed up {when(c["date"])}')
+                    + ' · '
                     f'<a href="../../c/{c["sha"][:12]}.html">what changed</a> · <a href="index.html">all versions</a></p>'
                     f'<nav class=wayback aria-label=Versions>{strip}</nav>'
                     + (f'<p class=muted>Removed since previous version: {esc(", ".join(removed))}</p>' if removed else "")
