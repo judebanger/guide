@@ -51,16 +51,13 @@ Requires `python3` and `git` with push access to this repo.
 
 ## Archive website
 
-**https://judebanger.github.io/guide/** — a wayback-style view of this repo,
-rebuilt by `.github/workflows/pages.yml` after every push:
+**https://judebanger.github.io/guide/**, rebuilt by `.github/workflows/pages.yml` after every push.
 
-- **Timeline**: every prompt and every design backup with its timestamp (in
-  your local time), showing live previews of the pages that changed. Open a
-  moment for before → after previews of each changed page; the source diffs
-  are tucked away at the bottom.
-- **Designs**: each design as it looked after every sync, page by page, with
-  changed and new pages outlined; step through versions along the top.
-- **Files**: every file's change history, linking to the file as it was then.
+- The home page lists **sessions**: each chat (Claude Code or claude.ai) and each design.
+- A session page has a **timeline along the top**. Click a point (or use ← →) to see
+  that prompt and the artifacts it made, or, for a design, the pages that changed
+  in that backup as before → after previews. Claude's reply is folded underneath.
+- Links like `s/<session>.html#3` open a session at its third point.
 
 Build it locally with `python3 site/build.py` (output in `_site/`).
 

@@ -3,9 +3,9 @@
 
     python3 site/build.py [out_dir]        (default: _site)
 
-Wayback-style: every commit is a moment in time. Chat turns show the prompt,
-Claude's reply and the files changed (with diffs); design syncs show the whole
-design as it looked at that moment, page by page. Standard library only.
+One page per session (a chat, or a design). Each session page has a timeline
+along the top; picking a point shows that prompt with the artifacts it made, or,
+for a design, the pages as they looked at that backup. Standard library only.
 """
 import hashlib
 import html
@@ -21,10 +21,6 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "_site"))
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_URL = os.environ.get("GUIDE_REPO_URL", "https://github.com/judebanger/guide")
-
-MAX_DIFF_LINES = 1500
-MAX_DIFF_BYTES = 400_000
-
 
 def git(*args, binary=False):
     out = subprocess.run(["git", "-C", ROOT, *args], check=True, capture_output=True).stdout
@@ -163,35 +159,6 @@ def load_commits():
     return commits
 
 
-def split_diff(sha):
-    raw = git("show", "--format=", "--no-color", "--no-renames", "-U3", sha)
-    diffs = {}
-    for block in re.split(r"(?m)^(?=diff --git )", raw):
-        m = re.match(r"diff --git a/(.+?) b/(.+?)\n", block)
-        if m:
-            diffs[m.group(2)] = block
-    return diffs
-
-
-def render_diff(block):
-    if not block:
-        return "<p class=muted>No textual diff.</p>"
-    if "\nBinary files " in block or "GIT binary patch" in block:
-        return "<p class=muted>Binary file.</p>"
-    lines = block.split("\n")
-    start = next((n for n, l in enumerate(lines) if l.startswith("@@")), len(lines))
-    lines = lines[start:]
-    cut = ""
-    if len(lines) > MAX_DIFF_LINES or len(block) > MAX_DIFF_BYTES:
-        cut = f"<p class=muted>Diff truncated ({len(lines)} lines) — see the full file on GitHub.</p>"
-        lines = lines[:MAX_DIFF_LINES]
-    rows = []
-    for l in lines:
-        cls = "h" if l.startswith("@@") else "a" if l.startswith("+") else "d" if l.startswith("-") else ""
-        rows.append(f'<span class="{cls}">{esc(l)}</span>' if cls else esc(l))
-    return "<pre class=diff>" + "\n".join(rows) + "</pre>" + cut
-
-
 def classify(c):
     turn_files = [p for s, p in c["changes"] if s in "AM" and re.match(r"artifacts/text/(claude-code|claude-ai)-[^/]+/[^/]+\.md$", p)]
     if c["subject"].startswith("sync artifacts"):
@@ -253,13 +220,8 @@ def design_snapshot(sha, slug, blobs_dir):
 
 # ---------------------------------------------------------------- page shell
 
-def page(title, body, depth=0, active=""):
+def page(title, body, depth=0):
     up = "../" * depth
-    nav = "".join(
-        f'<a href="{up}{href}"{" aria-current=page" if key == active else ""}>{label}</a>'
-        for key, href, label in (("timeline", "index.html", "Timeline"),
-                                 ("designs", "designs.html", "Designs"),
-                                 ("files", "files.html", "Files")))
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -267,10 +229,10 @@ def page(title, body, depth=0, active=""):
 <link rel="stylesheet" href="{up}assets/style.css">
 <script defer src="{up}assets/app.js"></script>
 </head><body>
-<header class=top><a class=brand href="{up}index.html">guide<span>archive</span></a><nav>{nav}</nav>
+<header class=top><a class=brand href="{up}index.html">guide<span>archive</span></a>
 <a class=gh href="{REPO_URL}">GitHub ↗</a></header>
 <main>{body}</main>
-<footer>Built from <a href="{REPO_URL}">{esc(REPO_URL.split("github.com/")[-1])}</a>. Times shown in your local time zone; hover for UTC.</footer>
+<footer>Built from <a href="{REPO_URL}">{esc(REPO_URL.split("github.com/")[-1])}</a>. Times are in your local time zone; hover for UTC.</footer>
 </body></html>"""
 
 
@@ -279,11 +241,11 @@ def when(iso, cls="t"):
 
 
 IMG_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".avif"}
-TIMELINE_THUMBS = 6
+TEXT_EXT = {".md", ".txt", ".csv", ".json", ".py", ".js", ".ts", ".css", ".yml", ".yaml", ".sh"}
 
 
-def board_card(b, up, state, small=False):
-    """A live, scaled preview of one artboard."""
+def board_card(b, up, state="", small=False):
+    """A live, scaled preview of one design page."""
     src = f'{up}blob/{b["blob"]}.html'
     badge = f' <span class=badge>{state}</span>' if state else ""
     return (f'<figure class="board {state}{" small" if small else ""}" style="--w:{b["w"]};--h:{b["h"]}">'
@@ -292,18 +254,41 @@ def board_card(b, up, state, small=False):
             f'<figcaption>{esc(b["title"])}{badge}</figcaption></figure>')
 
 
-def file_card(x, up, small=False):
-    src = up + x["src"]
-    if x["kind"] == "img":
-        inner = f'<img loading=lazy src="{src}" alt="{esc(x["name"])}">'
-    else:
-        inner = f'<iframe loading=lazy src="{src}" title="{esc(x["name"])}" tabindex=-1></iframe>'
-    w, h = (1280, 800) if x["kind"] == "html" else (794, 1123)
-    return (f'<figure class="board file-{x["kind"]}{" small" if small else ""}" style="--w:{w};--h:{h}">'
-            f'<a class=frame href="{src}" target=_blank rel=noopener>{inner}</a><figcaption>{esc(x["name"])}</figcaption></figure>')
+def write_blob(sha, path):
+    blob = git("rev-parse", f"{sha}:{path}").strip()
+    ext = os.path.splitext(path)[1].lower()
+    out = os.path.join(OUT, "blob", blob + ext)
+    if not os.path.exists(out):
+        with open(out, "wb") as f:
+            f.write(git("cat-file", "-p", blob, binary=True))
+    return f"blob/{blob}{ext}", out
 
 
-KIND_LABEL = {"turn": "prompt", "sync": "design backup", "change": "repo change"}
+def artifact_card(sha, path, up):
+    """Preview of one file a prompt produced."""
+    name = os.path.basename(path)
+    ext = os.path.splitext(path)[1].lower()
+    src, local = write_blob(sha, path)
+    src = up + src
+    cap = f'<figcaption>{esc(name)} · <a href="{src}" download="{esc(name)}">download</a></figcaption>'
+    if ext in IMG_EXT:
+        return f'<figure class="art img"><a href="{src}" target=_blank rel=noopener><img loading=lazy src="{src}" alt="{esc(name)}"></a>{cap}</figure>'
+    if ext == ".pdf":
+        return f'<figure class="art doc"><iframe loading=lazy src="{src}" title="{esc(name)}"></iframe>{cap}</figure>'
+    if ext in (".html", ".htm"):
+        return (f'<figure class="board art" style="--w:1280;--h:800"><a class=frame href="{src}" target=_blank rel=noopener>'
+                f'<iframe loading=lazy src="{src}" title="{esc(name)}" tabindex=-1></iframe></a>{cap}</figure>')
+    if ext in TEXT_EXT and os.path.getsize(local) < 300_000:
+        text = open(local, encoding="utf-8", errors="replace").read()
+        inner = f'<div class=md>{markdown(text)}</div>' if ext == ".md" else f'<pre>{esc(text[:20000])}</pre>'
+        return f'<figure class="art text">{inner}{cap}</figure>'
+    return f'<figure class="art other"><a class=filebox href="{src}" download="{esc(name)}">{esc(ext.lstrip(".").upper() or "FILE")}</a>{cap}</figure>'
+
+
+def session_title(prompts):
+    first = next((p for p in prompts if p.strip()), "Untitled session")
+    first = re.sub(r"\s+", " ", first).strip()
+    return first[:90] + ("…" if len(first) > 90 else "")
 
 
 # ---------------------------------------------------------------- build
@@ -311,224 +296,129 @@ KIND_LABEL = {"turn": "prompt", "sync": "design backup", "change": "repo change"
 def main():
     if os.path.exists(OUT):
         shutil.rmtree(OUT)
-    for d in ("c", "d", "f", "blob", "assets"):
+    for d in ("s", "blob", "assets"):
         os.makedirs(os.path.join(OUT, d))
     shutil.copy(os.path.join(HERE, "style.css"), os.path.join(OUT, "assets", "style.css"))
     shutil.copy(os.path.join(HERE, "app.js"), os.path.join(OUT, "assets", "app.js"))
     open(os.path.join(OUT, ".nojekyll"), "w").close()
 
-    commits = load_commits()
-    file_hist = OrderedDict()          # path -> [(commit, status)]
-    design_versions = OrderedDict()    # slug -> [dict(commit, title, boards)]
-    entries = []
-
-    for c in commits:
+    sessions = OrderedDict()   # id -> dict(kind, steps, ...)
+    for c in load_commits():
         kind, turn_path = classify(c)
-        c["kind"] = kind
-        c["prompt"], c["response"], c["chat"] = c["subject"], "", ""
         if turn_path:
+            chat = turn_path.split("/")[2]
             meta, prompt, response = parse_turn(git("show", f"{c['sha']}:{turn_path}"))
-            c["prompt"] = prompt or c["subject"]
-            c["response"] = response
-            c["chat"] = turn_path.split("/")[2]
-            c["source"] = meta.get("source", "")
-            c["date"] = meta.get("time") or c["date"]
-        for s, p in c["changes"]:
-            file_hist.setdefault(p, []).append((c, s))
+            arts = [p for s, p in c["changes"] if s != "D" and p != turn_path and not is_noise(p)
+                    and re.match(rf"artifacts/[^/]+/{re.escape(chat)}/", p)]
+            s = sessions.setdefault(chat, dict(kind="chat", id=chat, steps=[],
+                                               source="Claude Code" if chat.startswith("claude-code") else "claude.ai"))
+            s["steps"].append(dict(sha=c["sha"], date=meta.get("time") or c["date"],
+                                   prompt=prompt or c["subject"], response=response, arts=arts))
         for slug in design_slugs_touched(c):
             title, boards, edited = design_snapshot(c["sha"], slug, os.path.join(OUT, "blob"))
-            design_versions.setdefault(slug, []).append(dict(commit=c, title=title, boards=boards, edited=edited))
-            c.setdefault("designs", []).append(slug)
-
-    # ---- what each design version changed, page by page
-    for slug, versions in design_versions.items():
-        for n, v in enumerate(versions):
-            prev = versions[n - 1] if n else None
+            s = sessions.setdefault("design-" + slug, dict(kind="design", id="design-" + slug, steps=[], source="Design"))
+            s["title"] = title
+            prev = s["steps"][-1] if s["steps"] else None
             pb = {b["name"]: b for b in prev["boards"]} if prev else {}
-            names = {b["name"] for b in v["boards"]}
-            v["delta"] = [("new" if b["name"] not in pb else "changed", b, pb.get(b["name"]))
-                          for b in v["boards"] if b["name"] not in pb or pb[b["name"]]["blob"] != b["blob"]]
-            v["delta"] += [("removed", None, pb[x]) for x in pb if x not in names]
-            v["first"] = prev is None
+            names = {b["name"] for b in boards}
+            delta = [("new" if b["name"] not in pb else "changed", b, pb.get(b["name"]))
+                     for b in boards if b["name"] not in pb or pb[b["name"]]["blob"] != b["blob"]]
+            delta += [("removed", None, pb[x]) for x in pb if x not in names]
+            s["steps"].append(dict(sha=c["sha"], date=c["date"], edited=edited, boards=boards,
+                                   delta=delta, first=prev is None))
 
-    # ---- previews of other files (chat outputs, non-design artifacts)
-    for c in commits:
-        c["files_preview"] = []
-        for s, p in c["changes"]:
-            if s == "D" or is_noise(p) or p.startswith("designs/"):
-                continue
-            ext = os.path.splitext(p)[1].lower()
-            kind = "img" if ext in IMG_EXT else "pdf" if ext == ".pdf" else "html" if ext in (".html", ".htm") else None
-            if not kind:
-                continue
-            blob = git("rev-parse", f"{c['sha']}:{p}").strip()
-            out = os.path.join(OUT, "blob", blob + ext)
-            if not os.path.exists(out):
-                with open(out, "wb") as f:
-                    f.write(git("cat-file", "-p", blob, binary=True))
-            c["files_preview"].append(dict(kind=kind, src=f"blob/{blob}{ext}", name=os.path.basename(p), path=p))
-
-    # ---- moment pages
-    for n, c in enumerate(commits):
-        diffs = split_diff(c["sha"])
-        prev_c = commits[n - 1] if n else None
-        next_c = commits[n + 1] if n + 1 < len(commits) else None
-        prev_a = f'<a href="{prev_c["sha"][:12]}.html">← earlier</a>' if prev_c else "<span></span>"
-        next_a = f'<a href="{next_c["sha"][:12]}.html">later →</a>' if next_c else "<span></span>"
-        body = [f'<div class=pager>{prev_a}<a href="../index.html#{c["short"]}">timeline</a>{next_a}</div>']
-        body.append(f'<p class=meta><span class="kind k-{c["kind"]}">{KIND_LABEL[c["kind"]]}</span> {when(c["date"])}'
-                    f'{" · " + esc(c["chat"]) if c["chat"] else ""}</p>')
-        if c["kind"] == "turn":
-            body.append(f'<section class=prompt><h2>Prompt</h2><div class=md>{markdown(c["prompt"])}</div></section>')
-            if c["response"]:
-                body.append(f'<details class=reply><summary>Claude\'s reply</summary><div class=md>{markdown(c["response"])}</div></details>')
-        else:
-            body.append(f'<h1 class=title>{"Design backup" if c["kind"] == "sync" else esc(c["subject"])}</h1>')
-        for slug in c.get("designs", []):
-            v = next(x for x in design_versions[slug] if x["commit"] is c)
-            whole = f'<a href="../d/{slug}/{c["sha"][:12]}.html">whole design at this moment →</a>'
-            edited = f' · edited {when(v["edited"])}' if v["edited"] else ""
-            body.append(f'<h2 class=dtitle>{esc(v["title"])} <span class=muted>{len(v["boards"])} pages{edited} · {whole}</span></h2>')
-            if v["first"]:
-                body.append('<p class=muted>First backup of this design.</p><div class=boards>'
-                            + "".join(board_card(b, "../", "") for b in v["boards"]) + "</div>")
-            elif not v["delta"]:
-                body.append('<p class=muted>No visible page changed (only settings or layout of the canvas).</p>')
+    cards = []
+    for sid, s in sessions.items():
+        steps = s["steps"]
+        if s["kind"] == "chat":
+            s["title"] = session_title([x["prompt"] for x in steps])
+        ticks, panels = [], []
+        last_day = None
+        for n, st in enumerate(steps):
+            day = st["date"][:10]
+            if day != last_day:
+                ticks.append(f'<li class=daymark>{when(day + "T12:00:00Z", "t day")}</li>')
+                last_day = day
+            if s["kind"] == "chat":
+                label = re.sub(r"\s+", " ", st["prompt"]).strip()
+                label = esc(label[:60] + ("…" if len(label) > 60 else ""))
+                extra = f'<span class=n>{len(st["arts"])} artifact{"" if len(st["arts"]) == 1 else "s"}</span>' if st["arts"] else ""
             else:
-                rows = []
-                for state, b, old in v["delta"]:
-                    if state == "changed":
-                        rows.append(f'<div class=pair><div class=side><span class=lbl>before</span>{board_card(old, "../", "")}</div>'
-                                    f'<div class=arrow aria-hidden=true>→</div><div class=side><span class=lbl>after</span>{board_card(b, "../", "changed")}</div></div>')
-                    elif state == "new":
-                        rows.append(f'<div class=pair><div class="side empty"><span class=lbl>before</span><div class=nothing>didn\'t exist</div></div>'
-                                    f'<div class=arrow aria-hidden=true>→</div><div class=side><span class=lbl>after</span>{board_card(b, "../", "new")}</div></div>')
-                    else:
-                        rows.append(f'<div class=pair><div class=side><span class=lbl>before</span>{board_card(old, "../", "removed")}</div>'
-                                    f'<div class=arrow aria-hidden=true>→</div><div class="side empty"><span class=lbl>after</span><div class=nothing>removed</div></div></div>')
-                counts = {k: sum(1 for x in v["delta"] if x[0] == k) for k in ("changed", "new", "removed")}
-                summary = ", ".join(f"{n} {k}" for k, n in counts.items() if n)
-                body.append(f'<p class=muted>{summary}</p><div class=pairs>{"".join(rows)}</div>')
-        if c["files_preview"]:
-            body.append('<h2>Files made</h2><div class=boards>' + "".join(file_card(x, "../") for x in c["files_preview"]) + "</div>")
-        ours = [(s, p) for s, p in c["changes"] if not is_noise(p)]
-        body.append(f'<details class=source><summary>Source changes · {len(c["changes"])} files</summary>'
-                    f'<p class=meta><a href="{REPO_URL}/commit/{c["sha"]}">{c["short"]} on GitHub ↗</a> · '
-                    f'<a href="{REPO_URL}/tree/{c["sha"]}">browse repo at this moment ↗</a></p>'
-                    + "".join(f'<details class=file><summary><span class="st st-{s}">{s}</span> <span class=path>{esc(p)}</span> '
-                              f'<a class=hist href="../f/{page_id(p)}.html">history</a></summary>{render_diff(diffs.get(p, ""))}</details>'
-                              for s, p in ours) + "</details>")
-        title = (c["prompt"] or c["subject"]).splitlines()[0][:80]
-        with open(os.path.join(OUT, "c", c["sha"][:12] + ".html"), "w", encoding="utf-8") as f:
-            f.write(page(title, "\n".join(body), 1))
+                cnt = {k: sum(1 for x in st["delta"] if x[0] == k) for k in ("changed", "new", "removed")}
+                label = "first backup" if st["first"] else (", ".join(f"{v} {k}" for k, v in cnt.items() if v) or "no visible change")
+                extra = f'<span class=n>{len(st["boards"])} pages</span>'
+            ticks.append(f'<li><button type=button class=tick data-step="{n}" aria-controls="step-{n}">'
+                         f'{when(st["date"], "t time")}<span class=lbl>{label}</span>{extra}</button></li>')
+            panels.append(render_step(s, n, st))
+        latest = steps[-1]
+        rng = f'{when(steps[0]["date"])} – {when(latest["date"])}' if len(steps) > 1 else when(latest["date"])
+        unit = "prompt" if s["kind"] == "chat" else "version"
+        meta = f'{s["source"]} · {len(steps)} {unit}{"" if len(steps) == 1 else "s"} · {rng}'
+        body = (f'<p class=crumb><a href="../index.html">← All sessions</a></p>'
+                f'<h1 class=title>{esc(s["title"])}</h1><p class=meta>{meta}</p>'
+                f'<div class=trackwrap><button type=button class=nav data-dir=-1 aria-label="Earlier">‹</button>'
+                f'<ol class=track>{"".join(ticks)}</ol>'
+                f'<button type=button class=nav data-dir=1 aria-label="Later">›</button></div>'
+                f'<div class=panels data-default="{len(steps) - 1}">{"".join(panels)}</div>')
+        with open(os.path.join(OUT, "s", sid + ".html"), "w", encoding="utf-8") as f:
+            f.write(page(s["title"], body, 1))
 
-    # ---- design version pages
-    design_rows = []
-    for slug, versions in design_versions.items():
-        os.makedirs(os.path.join(OUT, "d", slug), exist_ok=True)
-        for n, v in enumerate(versions):
-            c, prev = v["commit"], (versions[n - 1] if n else None)
-            prev_blobs = {b["name"]: b["blob"] for b in prev["boards"]} if prev else {}
-            cards = []
-            for b in v["boards"]:
-                state = "" if not prev else ("new" if b["name"] not in prev_blobs else "changed" if prev_blobs[b["name"]] != b["blob"] else "")
-                cards.append(board_card(b, "../../", state))
-            removed = [x for x in prev_blobs if x not in {b["name"] for b in v["boards"]}] if prev else []
-            strip = "".join(
-                f'<a href="{x["commit"]["sha"][:12]}.html"{" aria-current=page" if x is v else ""}>{when(x["commit"]["date"], "t short")}</a>'
-                for x in versions)
-            body = (f'<h1 class=title>{esc(v["title"])}</h1>'
-                    f'<p class=meta>Version {n + 1} of {len(versions)} · '
-                    + (f'last edited {when(v["edited"])}, backed up {when(c["date"])}' if v["edited"] else f'backed up {when(c["date"])}')
-                    + ' · '
-                    f'<a href="../../c/{c["sha"][:12]}.html">what changed</a> · <a href="index.html">all versions</a></p>'
-                    f'<nav class=wayback aria-label=Versions>{strip}</nav>'
-                    + (f'<p class=muted>Removed since previous version: {esc(", ".join(removed))}</p>' if removed else "")
-                    + '<div class=boards>' + "".join(cards) + "</div>")
-            with open(os.path.join(OUT, "d", slug, c["sha"][:12] + ".html"), "w", encoding="utf-8") as f:
-                f.write(page(v["title"], body, 2, "designs"))
-        latest = versions[-1]
-        items = "".join(
-            f'<li><a href="{x["commit"]["sha"][:12]}.html">{when(x["commit"]["date"])}</a> — {len(x["boards"])} pages</li>'
-            for x in reversed(versions))
-        with open(os.path.join(OUT, "d", slug, "index.html"), "w", encoding="utf-8") as f:
-            f.write(page(latest["title"], f'<h1 class=title>{esc(latest["title"])}</h1><p class=meta>{len(versions)} saved versions</p><ul class=versions>{items}</ul>', 2, "designs"))
-        b0 = latest["boards"][0] if latest["boards"] else None
-        thumb = (f'<span class=thumb style="--w:{b0["w"]};--h:{b0["h"]}"><iframe loading=lazy src="blob/{b0["blob"]}.html" tabindex=-1 title=""></iframe></span>' if b0 else "")
-        design_rows.append(f'<a class=designcard href="d/{slug}/{latest["commit"]["sha"][:12]}.html">{thumb}<span><b>{esc(latest["title"])}</b>'
-                           f'<br><span class=muted>{len(latest["boards"])} pages · {len(versions)} versions · last {when(latest["commit"]["date"])}</span></span></a>')
-    with open(os.path.join(OUT, "designs.html"), "w", encoding="utf-8") as f:
-        f.write(page("Designs", '<h1 class=title>Designs</h1><div class=designgrid>' + ("".join(design_rows) or "<p class=muted>No designs yet.</p>") + "</div>", 0, "designs"))
+        if s["kind"] == "design" and latest["boards"]:
+            b0 = latest["boards"][0]
+            thumb = (f'<span class="thumb board" style="--w:{b0["w"]};--h:{b0["h"]}"><span class=frame>'
+                     f'<iframe loading=lazy src="blob/{b0["blob"]}.html" tabindex=-1 title=""></iframe></span></span>')
+        else:
+            first_art = next((p for st in steps for p in st["arts"] if os.path.splitext(p)[1].lower() in IMG_EXT), None)
+            thumb = (f'<span class="thumb pic"><img loading=lazy src="{write_blob(next(st["sha"] for st in steps if first_art in st["arts"]), first_art)[0]}" alt=""></span>'
+                     if first_art else f'<span class="thumb chat" aria-hidden=true>{len(steps)}</span>')
+        cards.append((latest["date"], f'<a class=session href="s/{sid}.html">{thumb}<span class=info>'
+                                      f'<span class="src src-{s["kind"]}">{s["source"]}</span>'
+                                      f'<b>{esc(s["title"])}</b><span class=muted>{len(steps)} {unit}{"" if len(steps) == 1 else "s"} · last {when(latest["date"])}</span>'
+                                      f'</span></a>'))
 
-    # ---- file history pages
-    tree_rows = []
-    for p, hist in sorted(file_hist.items()):
-        if is_noise(p):
-            continue
-        items = "".join(
-            f'<li><span class="st st-{s}">{s}</span> {when(c["date"])} <a href="../c/{c["sha"][:12]}.html">{esc((c["prompt"] or c["subject"]).splitlines()[0][:120])}</a>'
-            f' · <a href="{REPO_URL}/blob/{c["sha"]}/{p}">file then ↗</a></li>' for c, s in reversed(hist))
-        with open(os.path.join(OUT, "f", page_id(p) + ".html"), "w", encoding="utf-8") as f:
-            f.write(page(p, f'<h1 class="title path">{esc(p)}</h1><p class=meta>{len(hist)} changes</p><ul class=versions>{items}</ul>', 1, "files"))
-        tree_rows.append(f'<li data-q="{esc(p.lower())}"><a href="f/{page_id(p)}.html">{esc(p)}</a> <span class=muted>{len(hist)}× · last {when(hist[-1][0]["date"])}</span></li>')
-    with open(os.path.join(OUT, "files.html"), "w", encoding="utf-8") as f:
-        f.write(page("Files", '<h1 class=title>Every file, every change</h1><input class=search type=search placeholder="Filter files…" data-filter=".filelist li">'
-                     '<ul class="filelist versions">' + "".join(tree_rows) + "</ul>", 0, "files"))
-
-    # ---- timeline (index)
-    days = OrderedDict()
-    for c in reversed(commits):
-        days.setdefault(c["date"][:10], []).append(c)
-    cal = OrderedDict()
-    for d, cs in days.items():
-        cal.setdefault(d[:7], {})[d] = len(cs)
-    groups = []
-    for d, cs in days.items():
-        rows = []
-        for c in cs:
-            text = (c["prompt"] or c["subject"]).strip()
-            first = text.splitlines()[0] if text else ""
-            previews = []
-            for slug in c.get("designs", []):
-                v = next(x for x in design_versions[slug] if x["commit"] is c)
-                shown = v["boards"] if v["first"] else [b for st, b, _ in v["delta"] if b]
-                states = {} if v["first"] else {b["name"]: st for st, b, _ in v["delta"] if b}
-                more = len(shown) - TIMELINE_THUMBS
-                cards = "".join(board_card(b, "", states.get(b["name"], ""), small=True) for b in shown[:TIMELINE_THUMBS])
-                if more > 0:
-                    cards += f'<a class=more href="c/{c["sha"][:12]}.html">+{more} more</a>'
-                if v["first"]:
-                    what = f'first backup · {len(v["boards"])} pages'
-                else:
-                    counts = {k: sum(1 for x in v["delta"] if x[0] == k) for k in ("changed", "new", "removed")}
-                    what = ", ".join(f"{n} {k}" for k, n in counts.items() if n) or "no visible change"
-                previews.append(f'<div class=dprev><a class=dname href="d/{slug}/{c["sha"][:12]}.html">{esc(v["title"])}</a> '
-                                f'<span class=muted>{what}</span><div class=strip>{cards}</div></div>')
-            if c["files_preview"]:
-                previews.append('<div class=strip>' + "".join(file_card(x, "", small=True) for x in c["files_preview"][:TIMELINE_THUMBS]) + "</div>")
-            reply = ""
-            if c["kind"] == "turn" and c["response"]:
-                r = re.sub(r"\s+", " ", re.sub(r"[`*#>|]", "", c["response"])).strip()
-                reply = f'<p class=excerpt>{esc(r[:240])}{"…" if len(r) > 240 else ""}</p>'
-            heading = (f'<a class=p href="c/{c["sha"][:12]}.html">{esc(first[:300])}</a>' if c["kind"] == "turn"
-                       else f'<a class=p href="c/{c["sha"][:12]}.html">{"Design backup" if c["kind"] == "sync" else esc(first[:300])}</a>')
-            rows.append(f'<li{" hidden" if c["kind"] == "change" else ""} id="{c["short"]}" class="moment k-{c["kind"]}{" has-prev" if previews else ""}" data-q="{esc(text.lower())} {esc(c["chat"].lower())}" data-kind="{c["kind"]}">'
-                        f'<div class=when>{when(c["date"], "t time")}<span class="kind k-{c["kind"]}">{KIND_LABEL[c["kind"]]}</span></div>'
-                        f'<div class=what>{heading}{reply}{"".join(previews)}</div></li>')
-        groups.append(f'<section class=day id="day-{d}"><h2 class=dayhead>{when(d + "T00:00:00Z", "t date")}</h2><ul class=entries>{"".join(rows)}</ul></section>')
-    cal_html = "".join(
-        f'<div class=month><b>{m}</b><div class=dots>' + "".join(
-            f'<a href="#day-{d}" title="{d}: {n}" style="--n:{min(n, 12)}">{int(d[8:])}</a>' for d, n in sorted(ds.items()))
-        + "</div></div>" for m, ds in cal.items())
-    kinds = "".join(f'<label><input type=checkbox{"" if k == "change" else " checked"} value="{k}"> {v}</label>' for k, v in KIND_LABEL.items())
-    stats = f'{sum(1 for c in commits if c["kind"] == "turn")} prompts · {len(design_versions)} designs · {len(commits)} moments'
-    body = (f'<h1 class=title>Timeline</h1><p class=meta>{stats}</p>'
-            f'<div class=cal>{cal_html}</div>'
-            f'<div class=controls><input class=search type=search placeholder="Search prompts…" data-filter=".entries li"><span class=kinds>{kinds}</span></div>'
-            + "".join(groups))
+    cards.sort(key=lambda x: x[0], reverse=True)
+    body = ('<h1 class=title>Sessions</h1><p class=meta>Chats and designs, newest first. Open one to step through it.</p>'
+            '<input class=search type=search placeholder="Filter sessions…" data-filter=".sessions .session">'
+            '<div class=sessions>' + ("".join(c for _, c in cards) or "<p class=muted>Nothing recorded yet.</p>") + "</div>")
     with open(os.path.join(OUT, "index.html"), "w", encoding="utf-8") as f:
-        f.write(page("Timeline", body, 0, "timeline"))
-    print(f"built {len(commits)} commits, {len(design_versions)} designs, {len(file_hist)} files → {OUT}")
+        f.write(page("Sessions", body, 0))
+    print(f"built {len(sessions)} sessions → {OUT}")
+
+
+def render_step(s, n, st):
+    up = "../"
+    src = f'<a class=srclink href="{REPO_URL}/commit/{st["sha"]}">source ↗</a>'
+    if s["kind"] == "chat":
+        out = [f'<p class=meta>{when(st["date"])} · prompt {n + 1} of {len(s["steps"])} · {src}</p>',
+               f'<section class=prompt><div class=md>{markdown(st["prompt"])}</div></section>']
+        if st["arts"]:
+            out.append(f'<h2>Artifacts from this prompt</h2><div class=arts>'
+                       + "".join(artifact_card(st["sha"], p, up) for p in st["arts"]) + "</div>")
+        else:
+            out.append('<p class=muted>No artifacts were made in this prompt.</p>')
+        if st["response"]:
+            out.append(f'<details class=reply><summary>Claude\'s reply</summary><div class=md>{markdown(st["response"])}</div></details>')
+    else:
+        edited = f'edited {when(st["edited"])} · backed up {when(st["date"])}' if st["edited"] else f'backed up {when(st["date"])}'
+        out = [f'<p class=meta>Version {n + 1} of {len(s["steps"])} · {edited} · {src}</p>']
+        if st["first"]:
+            out.append(f'<h2>All {len(st["boards"])} pages</h2><div class=boards>'
+                       + "".join(board_card(b, up) for b in st["boards"]) + "</div>")
+        else:
+            if st["delta"]:
+                cnt = {k: sum(1 for x in st["delta"] if x[0] == k) for k in ("changed", "new", "removed")}
+                out.append(f'<h2>What changed <span class=muted>{", ".join(f"{v} {k}" for k, v in cnt.items() if v)}</span></h2><div class=pairs>')
+                for state, b, old in st["delta"]:
+                    before = board_card(old, up, "removed" if state == "removed" else "") if old else '<div class=nothing>didn\'t exist</div>'
+                    after = board_card(b, up, state) if b else '<div class=nothing>removed</div>'
+                    out.append(f'<div class=pair><div class=side><span class=lbl>before</span>{before}</div>'
+                               f'<div class=arrow aria-hidden=true>→</div><div class=side><span class=lbl>after</span>{after}</div></div>')
+                out.append("</div>")
+            else:
+                out.append('<p class=muted>No page changed in this backup (only canvas settings).</p>')
+            out.append(f'<details class=allpages><summary>All {len(st["boards"])} pages at this point</summary><div class=boards>'
+                       + "".join(board_card(b, up) for b in st["boards"]) + "</div></details>")
+    return f'<section class=step id="step-{n}" data-step="{n}" hidden>{"".join(out)}</section>'
 
 
 if __name__ == "__main__":
