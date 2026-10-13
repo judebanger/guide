@@ -278,7 +278,32 @@ def when(iso, cls="t"):
     return f'<time class="{cls}" datetime="{esc(iso)}" title="{esc(iso)}">{esc(iso.replace("T", " ")[:16])}</time>'
 
 
-KIND_LABEL = {"turn": "prompt", "sync": "design sync", "change": "change"}
+IMG_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".avif"}
+TIMELINE_THUMBS = 6
+
+
+def board_card(b, up, state, small=False):
+    """A live, scaled preview of one artboard."""
+    src = f'{up}blob/{b["blob"]}.html'
+    badge = f' <span class=badge>{state}</span>' if state else ""
+    return (f'<figure class="board {state}{" small" if small else ""}" style="--w:{b["w"]};--h:{b["h"]}">'
+            f'<a class=frame href="{src}" target=_blank rel=noopener aria-label="Open {esc(b["title"])} full size">'
+            f'<iframe loading=lazy src="{src}" title="{esc(b["title"])}" tabindex=-1></iframe></a>'
+            f'<figcaption>{esc(b["title"])}{badge}</figcaption></figure>')
+
+
+def file_card(x, up, small=False):
+    src = up + x["src"]
+    if x["kind"] == "img":
+        inner = f'<img loading=lazy src="{src}" alt="{esc(x["name"])}">'
+    else:
+        inner = f'<iframe loading=lazy src="{src}" title="{esc(x["name"])}" tabindex=-1></iframe>'
+    w, h = (1280, 800) if x["kind"] == "html" else (794, 1123)
+    return (f'<figure class="board file-{x["kind"]}{" small" if small else ""}" style="--w:{w};--h:{h}">'
+            f'<a class=frame href="{src}" target=_blank rel=noopener>{inner}</a><figcaption>{esc(x["name"])}</figcaption></figure>')
+
+
+KIND_LABEL = {"turn": "prompt", "sync": "design backup", "change": "repo change"}
 
 
 # ---------------------------------------------------------------- build
@@ -315,38 +340,84 @@ def main():
             design_versions.setdefault(slug, []).append(dict(commit=c, title=title, boards=boards, edited=edited))
             c.setdefault("designs", []).append(slug)
 
-    # ---- commit pages
+    # ---- what each design version changed, page by page
+    for slug, versions in design_versions.items():
+        for n, v in enumerate(versions):
+            prev = versions[n - 1] if n else None
+            pb = {b["name"]: b for b in prev["boards"]} if prev else {}
+            names = {b["name"] for b in v["boards"]}
+            v["delta"] = [("new" if b["name"] not in pb else "changed", b, pb.get(b["name"]))
+                          for b in v["boards"] if b["name"] not in pb or pb[b["name"]]["blob"] != b["blob"]]
+            v["delta"] += [("removed", None, pb[x]) for x in pb if x not in names]
+            v["first"] = prev is None
+
+    # ---- previews of other files (chat outputs, non-design artifacts)
+    for c in commits:
+        c["files_preview"] = []
+        for s, p in c["changes"]:
+            if s == "D" or is_noise(p) or p.startswith("designs/"):
+                continue
+            ext = os.path.splitext(p)[1].lower()
+            kind = "img" if ext in IMG_EXT else "pdf" if ext == ".pdf" else "html" if ext in (".html", ".htm") else None
+            if not kind:
+                continue
+            blob = git("rev-parse", f"{c['sha']}:{p}").strip()
+            out = os.path.join(OUT, "blob", blob + ext)
+            if not os.path.exists(out):
+                with open(out, "wb") as f:
+                    f.write(git("cat-file", "-p", blob, binary=True))
+            c["files_preview"].append(dict(kind=kind, src=f"blob/{blob}{ext}", name=os.path.basename(p), path=p))
+
+    # ---- moment pages
     for n, c in enumerate(commits):
         diffs = split_diff(c["sha"])
         prev_c = commits[n - 1] if n else None
         next_c = commits[n + 1] if n + 1 < len(commits) else None
-        ours = [(s, p) for s, p in c["changes"] if not is_noise(p)]
-        noise = [(s, p) for s, p in c["changes"] if is_noise(p)]
         prev_a = f'<a href="{prev_c["sha"][:12]}.html">← earlier</a>' if prev_c else "<span></span>"
         next_a = f'<a href="{next_c["sha"][:12]}.html">later →</a>' if next_c else "<span></span>"
         body = [f'<div class=pager>{prev_a}<a href="../index.html#{c["short"]}">timeline</a>{next_a}</div>']
         body.append(f'<p class=meta><span class="kind k-{c["kind"]}">{KIND_LABEL[c["kind"]]}</span> {when(c["date"])}'
-                    f'{" · " + esc(c["chat"]) if c["chat"] else ""} · <a href="{REPO_URL}/commit/{c["sha"]}">{c["short"]}</a>'
-                    f' · <a href="{REPO_URL}/tree/{c["sha"]}">browse repo at this moment ↗</a></p>')
+                    f'{" · " + esc(c["chat"]) if c["chat"] else ""}</p>')
         if c["kind"] == "turn":
             body.append(f'<section class=prompt><h2>Prompt</h2><div class=md>{markdown(c["prompt"])}</div></section>')
             if c["response"]:
-                body.append(f'<section class=reply><h2>Reply</h2><div class=md>{markdown(c["response"])}</div></section>')
+                body.append(f'<details class=reply><summary>Claude\'s reply</summary><div class=md>{markdown(c["response"])}</div></details>')
         else:
-            body.append(f'<h1 class=title>{esc(c["subject"])}</h1>')
-            if c["body"]:
-                body.append(f'<div class=md>{markdown(c["body"])}</div>')
+            body.append(f'<h1 class=title>{"Design backup" if c["kind"] == "sync" else esc(c["subject"])}</h1>')
         for slug in c.get("designs", []):
             v = next(x for x in design_versions[slug] if x["commit"] is c)
-            body.append(f'<p class=callout>Design <a href="../d/{slug}/{c["sha"][:12]}.html"><b>{esc(v["title"])}</b> as it looked at this moment →</a> ({len(v["boards"])} pages)</p>')
-        body.append(f'<h2>Changed files <span class=muted>({len(c["changes"])})</span></h2>')
-        for s, p in ours:
-            body.append(f'<details class=file{" open" if len(ours) <= 6 else ""}><summary><span class="st st-{s}">{s}</span> '
-                        f'<span class=path>{esc(p)}</span> <a class=hist href="../f/{page_id(p)}.html">history</a></summary>'
-                        f'{render_diff(diffs.get(p, ""))}</details>')
-        if noise:
-            body.append(f'<details class=file><summary>{len(noise)} runtime/vendor files (not diffed)</summary><ul class=plain>'
-                        + "".join(f'<li><span class="st st-{s}">{s}</span> {esc(p)}</li>' for s, p in noise) + "</ul></details>")
+            whole = f'<a href="../d/{slug}/{c["sha"][:12]}.html">whole design at this moment →</a>'
+            edited = f' · edited {when(v["edited"])}' if v["edited"] else ""
+            body.append(f'<h2 class=dtitle>{esc(v["title"])} <span class=muted>{len(v["boards"])} pages{edited} · {whole}</span></h2>')
+            if v["first"]:
+                body.append('<p class=muted>First backup of this design.</p><div class=boards>'
+                            + "".join(board_card(b, "../", "") for b in v["boards"]) + "</div>")
+            elif not v["delta"]:
+                body.append('<p class=muted>No visible page changed (only settings or layout of the canvas).</p>')
+            else:
+                rows = []
+                for state, b, old in v["delta"]:
+                    if state == "changed":
+                        rows.append(f'<div class=pair><div class=side><span class=lbl>before</span>{board_card(old, "../", "")}</div>'
+                                    f'<div class=arrow aria-hidden=true>→</div><div class=side><span class=lbl>after</span>{board_card(b, "../", "changed")}</div></div>')
+                    elif state == "new":
+                        rows.append(f'<div class=pair><div class="side empty"><span class=lbl>before</span><div class=nothing>didn\'t exist</div></div>'
+                                    f'<div class=arrow aria-hidden=true>→</div><div class=side><span class=lbl>after</span>{board_card(b, "../", "new")}</div></div>')
+                    else:
+                        rows.append(f'<div class=pair><div class=side><span class=lbl>before</span>{board_card(old, "../", "removed")}</div>'
+                                    f'<div class=arrow aria-hidden=true>→</div><div class="side empty"><span class=lbl>after</span><div class=nothing>removed</div></div></div>')
+                counts = {k: sum(1 for x in v["delta"] if x[0] == k) for k in ("changed", "new", "removed")}
+                summary = ", ".join(f"{n} {k}" for k, n in counts.items() if n)
+                body.append(f'<p class=muted>{summary}</p><div class=pairs>{"".join(rows)}</div>')
+        if c["files_preview"]:
+            body.append('<h2>Files made</h2><div class=boards>' + "".join(file_card(x, "../") for x in c["files_preview"]) + "</div>")
+        ours = [(s, p) for s, p in c["changes"] if not is_noise(p)]
+        body.append(f'<details class=source><summary>Source changes · {len(c["changes"])} files</summary>'
+                    f'<p class=meta><a href="{REPO_URL}/commit/{c["sha"]}">{c["short"]} on GitHub ↗</a> · '
+                    f'<a href="{REPO_URL}/tree/{c["sha"]}">browse repo at this moment ↗</a></p>'
+                    + "".join(f'<details class=file><summary><span class="st st-{s}">{s}</span> <span class=path>{esc(p)}</span> '
+                              f'<a class=hist href="../f/{page_id(p)}.html">history</a></summary>{render_diff(diffs.get(p, ""))}</details>'
+                              for s, p in ours) + "</details>")
         title = (c["prompt"] or c["subject"]).splitlines()[0][:80]
         with open(os.path.join(OUT, "c", c["sha"][:12] + ".html"), "w", encoding="utf-8") as f:
             f.write(page(title, "\n".join(body), 1))
@@ -361,10 +432,7 @@ def main():
             cards = []
             for b in v["boards"]:
                 state = "" if not prev else ("new" if b["name"] not in prev_blobs else "changed" if prev_blobs[b["name"]] != b["blob"] else "")
-                cards.append(f'<figure class="board {state}" style="--w:{b["w"]};--h:{b["h"]}">'
-                             f'<a class=frame href="../../blob/{b["blob"]}.html" target=_blank rel=noopener>'
-                             f'<iframe loading=lazy src="../../blob/{b["blob"]}.html" title="{esc(b["title"])}" tabindex=-1></iframe></a>'
-                             f'<figcaption>{esc(b["title"])}{f" <span class=badge>{state}</span>" if state else ""}</figcaption></figure>')
+                cards.append(board_card(b, "../../", state))
             removed = [x for x in prev_blobs if x not in {b["name"] for b in v["boards"]}] if prev else []
             strip = "".join(
                 f'<a href="{x["commit"]["sha"][:12]}.html"{" aria-current=page" if x is v else ""}>{when(x["commit"]["date"], "t short")}</a>'
@@ -420,20 +488,39 @@ def main():
         for c in cs:
             text = (c["prompt"] or c["subject"]).strip()
             first = text.splitlines()[0] if text else ""
-            nf = len(c["changes"])
-            extra = f'{nf} file{"" if nf == 1 else "s"} changed'
-            if c.get("designs"):
-                extra += "".join(f' · <a href="d/{s}/{c["sha"][:12]}.html">view design as it was</a>' for s in c["designs"])
-            extra = f'<span class="extra muted">{extra}</span>'
-            rows.append(f'<li id="{c["short"]}" data-q="{esc(text.lower())} {esc(c["chat"].lower())}" data-kind="{c["kind"]}">'
-                        f'{when(c["date"], "t time")}<span class="kind k-{c["kind"]}">{KIND_LABEL[c["kind"]]}</span>'
-                        f'<a class=p href="c/{c["sha"][:12]}.html">{esc(first[:220])}</a>{extra}</li>')
+            previews = []
+            for slug in c.get("designs", []):
+                v = next(x for x in design_versions[slug] if x["commit"] is c)
+                shown = v["boards"] if v["first"] else [b for st, b, _ in v["delta"] if b]
+                states = {} if v["first"] else {b["name"]: st for st, b, _ in v["delta"] if b}
+                more = len(shown) - TIMELINE_THUMBS
+                cards = "".join(board_card(b, "", states.get(b["name"], ""), small=True) for b in shown[:TIMELINE_THUMBS])
+                if more > 0:
+                    cards += f'<a class=more href="c/{c["sha"][:12]}.html">+{more} more</a>'
+                if v["first"]:
+                    what = f'first backup · {len(v["boards"])} pages'
+                else:
+                    counts = {k: sum(1 for x in v["delta"] if x[0] == k) for k in ("changed", "new", "removed")}
+                    what = ", ".join(f"{n} {k}" for k, n in counts.items() if n) or "no visible change"
+                previews.append(f'<div class=dprev><a class=dname href="d/{slug}/{c["sha"][:12]}.html">{esc(v["title"])}</a> '
+                                f'<span class=muted>{what}</span><div class=strip>{cards}</div></div>')
+            if c["files_preview"]:
+                previews.append('<div class=strip>' + "".join(file_card(x, "", small=True) for x in c["files_preview"][:TIMELINE_THUMBS]) + "</div>")
+            reply = ""
+            if c["kind"] == "turn" and c["response"]:
+                r = re.sub(r"\s+", " ", re.sub(r"[`*#>|]", "", c["response"])).strip()
+                reply = f'<p class=excerpt>{esc(r[:240])}{"…" if len(r) > 240 else ""}</p>'
+            heading = (f'<a class=p href="c/{c["sha"][:12]}.html">{esc(first[:300])}</a>' if c["kind"] == "turn"
+                       else f'<a class=p href="c/{c["sha"][:12]}.html">{"Design backup" if c["kind"] == "sync" else esc(first[:300])}</a>')
+            rows.append(f'<li{" hidden" if c["kind"] == "change" else ""} id="{c["short"]}" class="moment k-{c["kind"]}{" has-prev" if previews else ""}" data-q="{esc(text.lower())} {esc(c["chat"].lower())}" data-kind="{c["kind"]}">'
+                        f'<div class=when>{when(c["date"], "t time")}<span class="kind k-{c["kind"]}">{KIND_LABEL[c["kind"]]}</span></div>'
+                        f'<div class=what>{heading}{reply}{"".join(previews)}</div></li>')
         groups.append(f'<section class=day id="day-{d}"><h2 class=dayhead>{when(d + "T00:00:00Z", "t date")}</h2><ul class=entries>{"".join(rows)}</ul></section>')
     cal_html = "".join(
         f'<div class=month><b>{m}</b><div class=dots>' + "".join(
             f'<a href="#day-{d}" title="{d}: {n}" style="--n:{min(n, 12)}">{int(d[8:])}</a>' for d, n in sorted(ds.items()))
         + "</div></div>" for m, ds in cal.items())
-    kinds = "".join(f'<label><input type=checkbox checked value="{k}"> {v}</label>' for k, v in KIND_LABEL.items())
+    kinds = "".join(f'<label><input type=checkbox{"" if k == "change" else " checked"} value="{k}"> {v}</label>' for k, v in KIND_LABEL.items())
     stats = f'{sum(1 for c in commits if c["kind"] == "turn")} prompts · {len(design_versions)} designs · {len(commits)} moments'
     body = (f'<h1 class=title>Timeline</h1><p class=meta>{stats}</p>'
             f'<div class=cal>{cal_html}</div>'

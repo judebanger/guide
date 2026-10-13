@@ -37,6 +37,7 @@
   }
   document.querySelectorAll("input[data-filter]").forEach(function (b) { b.addEventListener("input", apply); });
   kinds.forEach(function (k) { k.addEventListener("change", apply); });
+  apply();
 
   // Scale artboard previews to their card width.
   function fit() {

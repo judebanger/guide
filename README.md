@@ -54,8 +54,10 @@ Requires `python3` and `git` with push access to this repo.
 **https://judebanger.github.io/guide/** — a wayback-style view of this repo,
 rebuilt by `.github/workflows/pages.yml` after every push:
 
-- **Timeline**: every prompt with its timestamp (in your local time), Claude's
-  reply, and the files that turn changed, with diffs.
+- **Timeline**: every prompt and every design backup with its timestamp (in
+  your local time), showing live previews of the pages that changed. Open a
+  moment for before → after previews of each changed page; the source diffs
+  are tucked away at the bottom.
 - **Designs**: each design as it looked after every sync, page by page, with
   changed and new pages outlined; step through versions along the top.
 - **Files**: every file's change history, linking to the file as it was then.
