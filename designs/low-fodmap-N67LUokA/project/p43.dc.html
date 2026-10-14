@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>С чего начать тесты</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&amp;family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700;1,800&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#3d6b45}a:hover{color:#2c5034}
+.lead{margin:0;font-size:14.5px;line-height:23px}
+.box{box-sizing:border-box;border:1px solid #a9c5ab;border-radius:12px;padding:10px 22px 12px}
+.lab{font-size:9px;letter-spacing:0.17em;text-transform:uppercase;margin-bottom:6px}
+.tr{display:flex;align-items:baseline;gap:10px;font-size:14.5px;line-height:28px}
+.tr .l{width:20px;flex-shrink:0;text-align:center;font-family:'Playfair Display',Georgia,serif;font-weight:600;font-size:18px}
+.tr span{font-family:'Playfair Display',Georgia,serif;font-weight:500;font-size:16.5px}
+.tr i{flex:1;min-width:16px;border-bottom:1px dotted #8a8988;transform:translateY(-5px)}
+.tr b{font-weight:600;text-align:right}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:22px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));column-gap:20px}
+.col{border-top:1px solid #201f1d;padding-top:8px}
+.col h3{margin:0 0 3px;font-family:'Playfair Display',Georgia,serif;font-weight:500;font-size:16px;line-height:22px}
+.col p{margin:0;font-size:13px;line-height:19px}
+.rs{display:grid;grid-template-columns:200px minmax(0,1fr);column-gap:18px;padding:7px 0;font-size:13.5px;line-height:20px}
+.rs+.rs{border-top:1px solid #a9c5ab}
+.rs h3{margin:0;font-family:'Playfair Display',Georgia,serif;font-weight:500;font-size:16px;line-height:20px;color:#3d6b45}
+.h2{margin:0;padding-bottom:5px;border-bottom:1px solid #201f1d;font-family:'Playfair Display',Georgia,serif;font-weight:500;font-size:21px;line-height:28px}
+</style>
+</helmet>
+<div style="width: 794px; height: 1123px; position: relative; overflow: hidden; background: #ffffff; color: #201f1d; font-family: 'Lora', Georgia, serif">
+<div style="position: absolute; left: 0; top: 1px; width: 794px; height: 113px; background: #bf4139"></div>
+<div style="position: absolute; left: 0; top: 1px; width: 794px; height: 113px; background: #f5a13f; clip-path: polygon(259px 0, 794px 0, 794px 113px, 236px 113px)"></div>
+<div style="position: absolute; left: 0; top: 1px; width: 794px; height: 113px; background: #467049; clip-path: polygon(330px 0, 794px 0, 794px 113px, 303px 113px)"></div>
+<div style="position: absolute; left: 40px; top: 36px; font-size: 9.5px; letter-spacing: 0.17em; text-transform: uppercase; color: rgba(255,255,255,0.72)">Low-FODMAP диета · этап 2</div>
+<h1 style="position: absolute; left: 40px; top: 53px; margin: 0; font-family: 'Playfair Display', Georgia, serif; font-weight: 400; font-size: 33px; line-height: 40px; color: #ffffff">С чего начать тесты</h1>
+
+<div style="position: absolute; left: 40px; top: 136px; width: 714px; display: flex; flex-direction: column; gap: 16px">
+<p class="lead">FODMAP – это несколько разных групп углеводов, и чаще всего реакция бывает не на все, а на одну-две. Один тест занимает 5–6 дней, поэтому проверять каждый продукт красного списка по очереди слишком долго. Начните с групп: по одному продукту на каждую. За 6–8 недель станет понятно, какие группы вы переносите, а какие нет.</p>
+<div class="box">
+<div class="lab">Группа и тестовый продукт</div>
+<div class="tr"><em class="l" style="font-style: normal; color: #f5a13f">D</em><span>Лактоза</span><i></i><b>молоко / кефир / йогурт</b></div>
+<div class="tr"><em class="l" style="font-style: normal; color: #467049">M</em><span>Фруктоза</span><i></i><b>мёд или манго</b></div>
+<div class="tr"><em class="l" style="font-style: normal; color: #3d6b45">P</em><span>Сорбит</span><i></i><b>авокадо, ежевика, абрикос, вишня, черешня или мякоть кокоса</b></div>
+<div class="tr"><em class="l" style="font-style: normal; color: #3d6b45">P</em><span>Маннит</span><i></i><b>грибы</b></div>
+<div class="tr"><em class="l" style="font-style: normal; color: #bf4139">O</em><span>Фруктаны: злаки</span><i></i><b>пшеничная паста / белый хлеб больше 1 куска / ржаной хлеб</b></div>
+<div class="tr"><em class="l" style="font-style: normal; color: #bf4139">O</em><span>Фруктаны: овощи</span><i></i><b>лук, чеснок</b></div>
+<div class="tr"><em class="l" style="font-style: normal; color: #bf4139">O</em><span>ГОС</span><i></i><b>чечевица</b></div>
+<p style="margin: 6px 0 0; font-style: italic; font-size: 12.5px; line-height: 18px; color: #4a4947">Дозы на каждый день теста – в таблицах «Дозы ввода» на следующих страницах.</p>
+</div>
+<div class="g2">
+<div class="col"><h3>Почему фруктаны проверяются дважды</h3><p>Злаки и лук с чесноком часто переносятся по-разному: хлеб может подходить, а лук – нет, и наоборот.</p></div>
+<div class="col"><h3>Почему в тестах нет яблока или арбуза</h3><p>В них сразу несколько групп FODMAP, и по реакции не понять, на что именно. Такие продукты проверяйте после групповых тестов.</p></div>
+</div>
+<div>
+<h2 class="h2">Как проходить</h2>
+<div class="g3" style="margin-top: 10px">
+<div class="col" style="border-top: none; padding-top: 0"><h3>Порядок любой</h3><p>Начните с группы, которую больше всего хочется вернуть: скучаете по хлебу – начните со злаков.</p></div>
+<div class="col" style="border-top: none; padding-top: 0"><h3>Между тестами – этап 1</h3><p>Даже если группа прошла тест, до конца всех тестов питайтесь как на этапе 1, иначе эффекты разных групп сложатся.</p></div>
+<div class="col" style="border-top: none; padding-top: 0"><h3>Отмечайте порог</h3><p>Записывайте в дневник дозу, на которой появились симптомы. Она важнее отметки «прошел / не прошел».</p></div>
+</div>
+</div>
+<div>
+<h2 class="h2">Что делать с результатами</h2>
+<div style="margin-top: 4px">
+<div class="rs"><h3>Тест пройден</h3><span>Возвращайте продукты группы в рацион постепенно, ориентируясь на дозу третьего дня.</span></div>
+<div class="rs"><h3>Реакция на высокой дозе</h3><span>Оставьте продукты группы в небольших порциях – ниже вашего порога.</span></div>
+<div class="rs"><h3>Реакция уже на первой дозе</h3><span>Пока ограничьте эту группу и вернитесь к тесту через 2–3 месяца: переносимость со временем меняется.</span></div>
+<div class="rs"><h3>Затем – смешанные продукты</h3><span>Когда понятны все группы, проверяйте продукты с несколькими FODMAP. Если сорбит и фруктоза прошли, яблоко, скорее всего, тоже подойдет.</span></div>
+</div>
+</div>
+</div>
+
+<div class="pgnum" style="position: absolute; left: 357px; top: 1077px; width: 80px; text-align: center; font-size: 12.5px; line-height: 18px">22</div>
+<div style="position: absolute; left: 40px; top: 1066px; width: 714px; border-top: 1px solid #201f1d; padding-top: 10px; display: flex; justify-content: space-between; align-items: baseline">
+<span style="font-weight: 700; font-size: 13.5px">FODMAP · этап 2</span>
+<span style="display: flex; gap: 6px; align-items: baseline"><span style="font-size: 13px">Мария Тайц</span><span style="font-size: 11px; letter-spacing: 0.12em; color: #3d6b45; border-bottom: 1px solid #3d6b45">нутрициолог</span></span>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":794,"height":1123}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
