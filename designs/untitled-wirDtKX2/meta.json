@@ -1,0 +1,33 @@
+{
+  "title": "\u0414\u043d\u0435\u0432\u043d\u0438\u043a \u043f\u0438\u0442\u0430\u043d\u0438\u044f \u0434\u043b\u044f \u0436\u0435\u043d\u0449\u0438\u043d",
+  "url": "https://claude.ai/artifact/2ZoE4C8LrUVx9DwirDtKX2",
+  "type": "Design",
+  "updated": "2026-10-21T08:48:21Z",
+  "synced_at": "2026-10-21T08:52:03+00:00",
+  "files": [
+    "designs/untitled-wirDtKX2/SKILL.md",
+    "designs/untitled-wirDtKX2/artifact-type/app.css",
+    "designs/untitled-wirDtKX2/artifact-type/app.js",
+    "designs/untitled-wirDtKX2/artifact-type/dc-runtime.js",
+    "designs/untitled-wirDtKX2/artifact-type/fast-edit-worker.js",
+    "designs/untitled-wirDtKX2/artifact-type/fonts/anthropicons-fizzy-lake.woff2",
+    "designs/untitled-wirDtKX2/artifact-type/fonts/anthropicons-variable.woff2",
+    "designs/untitled-wirDtKX2/artifact-type/reference/brand-colors.md",
+    "designs/untitled-wirDtKX2/artifact-type/reference/brand-typography.md",
+    "designs/untitled-wirDtKX2/artifact-type/reference/craft.md",
+    "designs/untitled-wirDtKX2/artifact-type/reference/design-system-components.md",
+    "designs/untitled-wirDtKX2/artifact-type/reference/diagrams.md",
+    "designs/untitled-wirDtKX2/artifact-type/reference/format.md",
+    "designs/untitled-wirDtKX2/artifact-type/reference/google-fonts-families.json",
+    "designs/untitled-wirDtKX2/artifact-type/reference/google-fonts-notices.json",
+    "designs/untitled-wirDtKX2/artifact-type/reference/google-fonts-reserved.json",
+    "designs/untitled-wirDtKX2/artifact-type/reference/print.md",
+    "designs/untitled-wirDtKX2/artifact-type/reference/questions.md",
+    "designs/untitled-wirDtKX2/artifact-type/reference/view-state.md",
+    "designs/untitled-wirDtKX2/artifact-type/thumbnail/thumbnail.json",
+    "designs/untitled-wirDtKX2/index.html",
+    "designs/untitled-wirDtKX2/project/Main.dc.html",
+    "designs/untitled-wirDtKX2/project/Scale.dc.html",
+    "designs/untitled-wirDtKX2/project/canvas.json"
+  ]
+}
