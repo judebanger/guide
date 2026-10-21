@@ -29,7 +29,7 @@ a{color:#A8445A}a:hover{color:#7E2F41}
 <div style="display: flex; align-items: center; font-family: 'Cormorant Garamond', serif; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: #5A3A40; border-bottom: 1px solid {{accent}}">Приём пищи</div>
 <sc-for list="{{days}}" as="day" hint-placeholder-count="3">
 <div style="display: flex; align-items: center; gap: 10px; padding-left: 12px; border-left: 1px solid {{rule}}; border-bottom: 1px solid {{accent}}">
-<span style="font-family: 'Cormorant Garamond', serif; font-size: 24px; line-height: 1; color: {{accent}}">{{day.n}}</span>
+<span style="font-family: 'Lora', serif; font-size: 18px; line-height: 1; color: {{accent}}">{{day.n}}</span>
 <span style="font-family: 'Cormorant Garamond', serif; font-size: 16px; font-weight: 500">{{day.name}}</span>
 </div>
 </sc-for>
@@ -109,9 +109,10 @@ a{color:#A8445A}a:hover{color:#7E2F41}
 
 </div>
 
-<div style="display: flex; align-items: center; justify-content: space-between; padding-top: 7px; border-top: 1px solid {{accent}}; font-size: 12px">
-<span><span style="color: #5A3A40">Нутрициолог ·</span> <span style="color: {{accent}}">Мария Тайц</span></span>
-<span style="font-family: 'Cormorant Garamond', serif; font-size: 12px; letter-spacing: 0.28em; text-transform: uppercase; color: {{accent}}">Дружить с едой</span>
+<div style="margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-top: 9px; border-top: 1px solid {{accent}}; font-size: 12px">
+<span style="white-space: nowrap"><span style="color: #5A3A40">Нутрициолог ·</span> <span style="color: {{accent}}">Мария Тайц</span></span>
+<span style="flex: 1; text-align: center; font-size: 10px; line-height: 1.35; color: #6E4E54"></span>
+<span style="white-space: nowrap; font-family: 'Cormorant Garamond', serif; font-size: 12px; letter-spacing: 0.28em; text-transform: uppercase; color: {{accent}}">Дружить с едой</span>
 </div>
 </div>
 </x-dc>
