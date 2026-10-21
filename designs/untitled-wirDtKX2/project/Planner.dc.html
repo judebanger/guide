@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Планер меню</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&amp;family=Lora:ital,wght@0,400;0,500;1,400&amp;display=swap">
+<style>
+body{margin:0;background:#F7F1DE;font-variant-numeric:lining-nums}
+a{color:#A8445A}a:hover{color:#7E2F41}
+</style>
+</helmet>
+<div style="width: 794px; height: 1123px; box-sizing: border-box; padding: 40px 52px 26px; background: #F7F1DE; color: #2E1A1E; font-family: 'Lora', Georgia, serif; display: flex; flex-direction: column; gap: 16px">
+
+<div style="display: flex; flex-direction: column; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid {{accent}}">
+<h1 style="margin: 0; font-family: 'Cormorant Garamond', serif; font-weight: 400; font-size: 32px; line-height: 1.05; color: {{accent}}">Планер меню <span style="font-style: italic">· три дня</span></h1>
+<p style="margin: 0; font-size: 12px; line-height: 1.5">Распишите, что войдёт в каждый приём пищи, по группам продуктов – так легче увидеть баланс за день и сразу составить список покупок.</p>
+</div>
+
+<div style="flex-grow: 1; min-height: 0; display: grid; grid-template-columns: 30px 92px repeat(4, minmax(0, 1fr)); grid-template-rows: auto repeat(12, minmax(0, 1fr)); border: 1px solid #B89A9F; border-radius: 10px; overflow: hidden; background: #FFFDF7">
+<div style="grid-column: 1 / span 2; border-right: 1px solid #D6B8B8; border-bottom: 1.5px solid #B9506A"></div>
+<div style="background: #DEE2CC; padding: 10px 10px 9px; border-right: 1px solid #D6B8B8; border-bottom: 1.5px solid #B9506A; display: flex; flex-direction: column; gap: 3px"><div style="font-family: 'Cormorant Garamond', serif; font-size: 16px; font-weight: 600; line-height: 1.1; color: #4E5838">Овощи и фрукты</div><div style="font-size: 10.5px; line-height: 1.3; font-style: italic; color: #4A3337">5 и более порций в день</div></div>
+<div style="background: #F1E2D6; padding: 10px 10px 9px; border-right: 1px solid #D6B8B8; border-bottom: 1.5px solid #B9506A; display: flex; flex-direction: column; gap: 3px"><div style="font-family: 'Cormorant Garamond', serif; font-size: 16px; font-weight: 600; line-height: 1.1; color: #7A5A2E">Зерновые</div><div style="font-size: 10.5px; line-height: 1.3; font-style: italic; color: #4A3337">3–4 порции в день</div></div>
+<div style="background: #F0D6D7; padding: 10px 10px 9px; border-right: 1px solid #D6B8B8; border-bottom: 1.5px solid #B9506A; display: flex; flex-direction: column; gap: 3px"><div style="font-family: 'Cormorant Garamond', serif; font-size: 16px; font-weight: 600; line-height: 1.1; color: #8E3549">Белок</div><div style="font-size: 10.5px; line-height: 1.3; font-style: italic; color: #4A3337">2–3 порции в день</div></div>
+<div style="background: #DCE5EB; padding: 10px 10px 9px; border-bottom: 1.5px solid #B9506A; display: flex; flex-direction: column; gap: 3px"><div style="font-family: 'Cormorant Garamond', serif; font-size: 16px; font-weight: 600; line-height: 1.1; color: #3E5A6E">Молочные продукты</div><div style="font-size: 10.5px; line-height: 1.3; font-style: italic; color: #4A3337">2–3 порции в день</div></div>
+<div style="grid-column: 1; grid-row: span 4; border-bottom: 1.5px solid #B9506A; border-right: 1px solid #D6B8B8; background: #F1E2D6; display: flex; align-items: center; justify-content: center"><span style="writing-mode: vertical-rl; transform: rotate(180deg); font-family: 'Cormorant Garamond', serif; font-size: 15px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: {{accent}}">День <span style="font-family: Lora, serif; font-size: 13px; font-weight: 500; letter-spacing: 0">1</span></span></div>
+<div style="grid-column: 2; border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FBF6E9; display: flex; align-items: center; padding: 0 10px"><span style="font-family: 'Cormorant Garamond', serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #5A3A40">Завтрак</span></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="grid-column: 2; border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FBF6E9; display: flex; align-items: center; padding: 0 10px"><span style="font-family: 'Cormorant Garamond', serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #5A3A40">Обед</span></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="grid-column: 2; border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FBF6E9; display: flex; align-items: center; padding: 0 10px"><span style="font-family: 'Cormorant Garamond', serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #5A3A40">Ужин</span></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="grid-column: 2; border-bottom: 1.5px solid #B9506A; border-right: 1px solid #D6B8B8; background: #FBF6E9; display: flex; align-items: center; padding: 0 10px"><span style="font-family: 'Cormorant Garamond', serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #5A3A40">Перекусы</span></div>
+<div style="border-bottom: 1.5px solid #B9506A; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1.5px solid #B9506A; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1.5px solid #B9506A; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1.5px solid #B9506A; background: #FFFDF7"></div>
+<div style="grid-column: 1; grid-row: span 4; border-bottom: 1.5px solid #B9506A; border-right: 1px solid #D6B8B8; background: #F1E2D6; display: flex; align-items: center; justify-content: center"><span style="writing-mode: vertical-rl; transform: rotate(180deg); font-family: 'Cormorant Garamond', serif; font-size: 15px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: {{accent}}">День <span style="font-family: Lora, serif; font-size: 13px; font-weight: 500; letter-spacing: 0">2</span></span></div>
+<div style="grid-column: 2; border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FBF6E9; display: flex; align-items: center; padding: 0 10px"><span style="font-family: 'Cormorant Garamond', serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #5A3A40">Завтрак</span></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="grid-column: 2; border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FBF6E9; display: flex; align-items: center; padding: 0 10px"><span style="font-family: 'Cormorant Garamond', serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #5A3A40">Обед</span></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="grid-column: 2; border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FBF6E9; display: flex; align-items: center; padding: 0 10px"><span style="font-family: 'Cormorant Garamond', serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #5A3A40">Ужин</span></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="grid-column: 2; border-bottom: 1.5px solid #B9506A; border-right: 1px solid #D6B8B8; background: #FBF6E9; display: flex; align-items: center; padding: 0 10px"><span style="font-family: 'Cormorant Garamond', serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #5A3A40">Перекусы</span></div>
+<div style="border-bottom: 1.5px solid #B9506A; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1.5px solid #B9506A; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1.5px solid #B9506A; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1.5px solid #B9506A; background: #FFFDF7"></div>
+<div style="grid-column: 1; grid-row: span 4; border-right: 1px solid #D6B8B8; background: #F1E2D6; display: flex; align-items: center; justify-content: center"><span style="writing-mode: vertical-rl; transform: rotate(180deg); font-family: 'Cormorant Garamond', serif; font-size: 15px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: {{accent}}">День <span style="font-family: Lora, serif; font-size: 13px; font-weight: 500; letter-spacing: 0">3</span></span></div>
+<div style="grid-column: 2; border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FBF6E9; display: flex; align-items: center; padding: 0 10px"><span style="font-family: 'Cormorant Garamond', serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #5A3A40">Завтрак</span></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="grid-column: 2; border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FBF6E9; display: flex; align-items: center; padding: 0 10px"><span style="font-family: 'Cormorant Garamond', serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #5A3A40">Обед</span></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="grid-column: 2; border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FBF6E9; display: flex; align-items: center; padding: 0 10px"><span style="font-family: 'Cormorant Garamond', serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #5A3A40">Ужин</span></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-bottom: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="grid-column: 2; border-right: 1px solid #D6B8B8; background: #FBF6E9; display: flex; align-items: center; padding: 0 10px"><span style="font-family: 'Cormorant Garamond', serif; font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #5A3A40">Перекусы</span></div>
+<div style="border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="border-right: 1px solid #D6B8B8; background: #FFFDF7"></div>
+<div style="background: #FFFDF7"></div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0; font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 21px; line-height: 1.1; color: {{accent}}">Список покупок</h2>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 24px">
+<div style="display: flex; flex-direction: column"><div style="height: 22px; border-bottom: 1px solid #8C6A70"></div><div style="height: 22px; border-bottom: 1px solid #8C6A70"></div><div style="height: 22px; border-bottom: 1px solid #8C6A70"></div><div style="height: 22px; border-bottom: 1px solid #8C6A70"></div></div>
+<div style="display: flex; flex-direction: column"><div style="height: 22px; border-bottom: 1px solid #8C6A70"></div><div style="height: 22px; border-bottom: 1px solid #8C6A70"></div><div style="height: 22px; border-bottom: 1px solid #8C6A70"></div><div style="height: 22px; border-bottom: 1px solid #8C6A70"></div></div>
+<div style="display: flex; flex-direction: column"><div style="height: 22px; border-bottom: 1px solid #8C6A70"></div><div style="height: 22px; border-bottom: 1px solid #8C6A70"></div><div style="height: 22px; border-bottom: 1px solid #8C6A70"></div><div style="height: 22px; border-bottom: 1px solid #8C6A70"></div></div>
+</div>
+</div>
+
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-top: 9px; border-top: 1px solid {{accent}}; font-size: 12px">
+<span style="white-space: nowrap"><span style="color: #5A3A40">Нутрициолог ·</span> <span style="color: {{accent}}">Мария Тайц</span></span>
+<span style="flex: 1; text-align: center; font-size: 10px; line-height: 1.35; color: #6E4E54"></span>
+<span style="white-space: nowrap; font-family: 'Cormorant Garamond', serif; font-size: 12px; letter-spacing: 0.28em; text-transform: uppercase; color: {{accent}}">Дружить с едой</span>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#B9506A","options":["#B9506A","#C65A6C","#9E3F55"]},"$preview":{"width":794,"height":1123}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#B9506A' };
+  }
+}
+</script>
+</body>
+</html>
