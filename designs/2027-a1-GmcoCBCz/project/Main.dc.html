@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Календарь 2027, A1</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#1A1A1A}a:hover{color:#000000}
+</style>
+</helmet>
+<div style="width: 3179px; height: 2245px; box-sizing: border-box; padding: 96px; display: flex; flex-direction: column; gap: 56px; background: #FFFFFF; color: #1A1A1A; font-family: 'Onest', system-ui, sans-serif; font-variant-numeric: tabular-nums; overflow: hidden">
+
+  <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 80px; flex: 0 0 auto">
+    <div style="display: flex; align-items: center; gap: 56px; padding-left: 220px; font-size: 28px; font-weight: 500; color: #1A1A1A">
+      <div style="display: flex; align-items: center; gap: 14px">
+        <svg aria-hidden="true" width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="{{kidColor}}" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="4" fill="{{kidColor}}"></circle><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"></path></svg>
+        <span>каникулы</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px">
+        <svg aria-hidden="true" width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="{{bdColor}}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2c-.9 1-1.3 1.8-1.3 2.4a1.3 1.3 0 0 0 2.6 0c0-.6-.4-1.4-1.3-2.4z" fill="{{bdColor}}"></path><path d="M12 8.4v2.6"></path><rect x="5" y="11" width="14" height="4.5" rx="1"></rect><rect x="3.5" y="15.5" width="17" height="5" rx="1"></rect><path d="M5 13.3c1.2 1 2.3 1 3.5 0s2.3-1 3.5 0 2.3 1 3.5 0 2.3-1 3.5 0"></path></svg>
+        <span>дни рождения семьи</span>
+      </div>
+    </div>
+    <h1 style="margin: 0; font-size: 150px; line-height: 0.85; font-weight: 800; letter-spacing: -0.03em; white-space: nowrap">{{year}}</h1>
+  </div>
+
+  <div style="flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px">
+    <sc-for list="{{months}}" as="m" hint-placeholder-count="12">
+      <div style="flex: 1 1 0; min-height: 0; display: flex; align-items: stretch">
+        <div style="flex: 0 0 220px; display: flex; align-items: center; justify-content: flex-end; padding-right: 28px; box-sizing: border-box; font-size: 124px; font-weight: 800; line-height: 1; letter-spacing: -0.04em">{{m.num}}</div>
+        <div style="flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: repeat(31, minmax(0, 1fr)); border-left: 2px solid #8C8C8C">
+          <sc-for list="{{m.days}}" as="d" hint-placeholder-count="31">
+            <div style="background: {{d.bg}}; border-top: 2px solid #8C8C8C; border-bottom: 2px solid #8C8C8C; border-right: 2px solid #8C8C8C; padding: 8px 9px; box-sizing: border-box; display: flex; justify-content: space-between; align-items: flex-start; position: relative">
+              <span style="font-size: 23px; font-weight: 600; line-height: 1; color: {{d.color}}">{{d.n}}</span>
+              <span style="font-size: 16px; line-height: 1.2; color: {{d.wdColor}}">{{d.wd}}</span>
+              <sc-if value="{{d.bd}}" hint-placeholder-val="{{ false }}">
+                <svg role="img" aria-label="День рождения" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="{{bdColor}}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 7px; bottom: 7px"><path d="M12 3.2c-.9 1-1.3 1.8-1.3 2.4a1.3 1.3 0 0 0 2.6 0c0-.6-.4-1.4-1.3-2.4z" fill="{{bdColor}}"></path><path d="M12 8.4v2.6"></path><rect x="5" y="11" width="14" height="4.5" rx="1"></rect><rect x="3.5" y="15.5" width="17" height="5" rx="1"></rect><path d="M5 13.3c1.2 1 2.3 1 3.5 0s2.3-1 3.5 0 2.3 1 3.5 0 2.3-1 3.5 0"></path></svg>
+              </sc-if>
+              <sc-if value="{{d.kid}}" hint-placeholder-val="{{ false }}">
+                <svg role="img" aria-label="Каникулы" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="{{kidColor}}" stroke-width="1.9" stroke-linecap="round" style="position: absolute; right: 7px; bottom: 7px"><circle cx="12" cy="12" r="4" fill="{{kidColor}}"></circle><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"></path></svg>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"year":{"editor":"int","default":2027,"min":2024,"max":2040},"accent":{"editor":"color","default":"#C62828","options":["#C62828","#1A1A1A","#1F5FAD","#2E7D4F"]},"weekendFill":{"editor":"color","default":"#F3F1EC","options":["#F3F1EC","#FFFFFF","#FDECEA","#EAF1FB"]},"breakColor":{"editor":"color","default":"#0F7B8A","options":["#0F7B8A","#B45309","#1F5FAD","#1A1A1A"]},"birthdayColor":{"editor":"color","default":"#6A3FA0","options":["#6A3FA0","#1F5FAD","#B45309","#1A1A1A"]},"$preview":{"width":3179,"height":2245}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const year = this.props.year ?? 2027;
+    const accent = this.props.accent ?? '#C62828';
+    const fill = this.props.weekendFill ?? '#F3F1EC';
+    const ink = '#1A1A1A';
+    const bdColor = this.props.birthdayColor ?? '#6A3FA0';
+    // Дни рождения семьи: месяц-день
+    // Производственный календарь РФ 2027 (Постановление Правительства от 17.09.2026 № 1187): нерабочие будни и рабочие выходные
+    const holidays = ['1-1', '1-4', '1-5', '1-6', '1-7', '1-8', '2-22', '2-23', '3-8', '5-3', '5-10', '6-14', '11-4', '11-5', '12-31'];
+    const workdays = ['2-20'];
+    // Каникулы ребёнка: [месяц, с дня, по день]
+    const kidBreaks = [[2, 13, 23], [4, 3, 11], [10, 2, 10], [11, 13, 21]];
+    const kidColor = this.props.breakColor ?? '#0F7B8A';
+    const birthdays = ['1-23', '2-5', '2-21', '4-17', '4-22', '4-25', '5-7', '6-2', '6-8', '6-25', '10-31', '11-21', '11-30'];
+    const grey = '#6B6B6B';
+    const names = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+    const wd = ['пн','вт','ср','чт','пт','сб','вс'];
+    const months = names.map((name, m) => {
+      const len = new Date(year, m + 1, 0).getDate();
+      const first = (new Date(year, m, 1).getDay() + 6) % 7;
+      const days = [];
+      for (let n = 1; n <= len; n++) {
+        const w = (first + n - 1) % 7;
+        const key = (m + 1) + '-' + n;
+        const we = year === 2027 ? ((w >= 5 && workdays.indexOf(key) === -1) || holidays.indexOf(key) !== -1) : w >= 5;
+        days.push({ n: n, wd: wd[w], bg: we ? fill : 'transparent', color: we ? accent : ink, wdColor: we ? accent : grey, bd: birthdays.indexOf((m + 1) + '-' + n) !== -1, kid: kidBreaks.some((r) => r[0] === m + 1 && n >= r[1] && n <= r[2]) });
+      }
+      const mini = [];
+      for (let i = 0; i < first; i++) mini.push({ n: '', color: ink });
+      days.forEach((d) => mini.push({ n: d.n, color: d.color }));
+      return { name: name, num: String(m + 1).padStart(2, '0'), days: days, mini: mini };
+    });
+    const wdHead = wd.map((label, i) => ({ label: label, color: i >= 5 ? accent : grey }));
+    return { year: year, months: months, wdHead: wdHead, bdColor: bdColor, kidColor: kidColor };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "title": "\u041d\u0430\u0441\u0442\u0435\u043d\u043d\u044b\u0439 \u043a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u044c 2027 \u00b7 A1",
+  "url": "https://claude.ai/artifact/8zcVBSwosfdxiFGmcoCBCz",
+  "type": "Design",
+  "updated": "2026-10-21T07:20:07Z",
+  "synced_at": "2026-10-21T07:51:45+00:00",
+  "files": [
+    "designs/2027-a1-GmcoCBCz/SKILL.md",
+    "designs/2027-a1-GmcoCBCz/artifact-type/app.css",
+    "designs/2027-a1-GmcoCBCz/artifact-type/app.js",
+    "designs/2027-a1-GmcoCBCz/artifact-type/dc-runtime.js",
+    "designs/2027-a1-GmcoCBCz/artifact-type/fast-edit-worker.js",
+    "designs/2027-a1-GmcoCBCz/artifact-type/fonts/anthropicons-fizzy-lake.woff2",
+    "designs/2027-a1-GmcoCBCz/artifact-type/fonts/anthropicons-variable.woff2",
+    "designs/2027-a1-GmcoCBCz/artifact-type/reference/brand-colors.md",
+    "designs/2027-a1-GmcoCBCz/artifact-type/reference/brand-typography.md",
+    "designs/2027-a1-GmcoCBCz/artifact-type/reference/craft.md",
+    "designs/2027-a1-GmcoCBCz/artifact-type/reference/design-system-components.md",
+    "designs/2027-a1-GmcoCBCz/artifact-type/reference/diagrams.md",
+    "designs/2027-a1-GmcoCBCz/artifact-type/reference/format.md",
+    "designs/2027-a1-GmcoCBCz/artifact-type/reference/google-fonts-families.json",
+    "designs/2027-a1-GmcoCBCz/artifact-type/reference/google-fonts-notices.json",
+    "designs/2027-a1-GmcoCBCz/artifact-type/reference/google-fonts-reserved.json",
+    "designs/2027-a1-GmcoCBCz/artifact-type/reference/print.md",
+    "designs/2027-a1-GmcoCBCz/artifact-type/reference/questions.md",
+    "designs/2027-a1-GmcoCBCz/artifact-type/reference/view-state.md",
+    "designs/2027-a1-GmcoCBCz/artifact-type/thumbnail/thumbnail.json",
+    "designs/2027-a1-GmcoCBCz/index.html",
+    "designs/2027-a1-GmcoCBCz/project/Main.dc.html",
+    "designs/2027-a1-GmcoCBCz/project/canvas.json"
+  ]
+}
