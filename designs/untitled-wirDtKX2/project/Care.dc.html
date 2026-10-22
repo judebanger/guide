@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Мой список заботы</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&amp;family=Lora:ital,wght@0,400;0,500;1,400&amp;display=swap">
+<style>
+body{margin:0;background:#F7F1DE;font-variant-numeric:lining-nums}
+a{color:#A8445A}a:hover{color:#7E2F41}
+</style>
+</helmet>
+<div style="width: 794px; height: 1123px; box-sizing: border-box; padding: 40px 52px 26px; background: #F7F1DE; color: #2E1A1E; font-family: 'Lora', Georgia, serif; display: flex; flex-direction: column; gap: 16px">
+
+<div style="display: flex; flex-direction: column; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid {{accent}}">
+<h1 style="margin: 0; font-family: 'Cormorant Garamond', serif; font-weight: 400; font-size: 32px; line-height: 1.05; color: {{accent}}">Мой список <span style="font-style: italic">заботы</span></h1>
+<p style="margin: 0; font-size: 12px; line-height: 1.5">Найдите, что приятно именно вам в каждом канале восприятия, и запишите по несколько идей. Слева – примеры, но ваши идеи могут быть совсем другими. Если своих пока нет, попробуйте что-то из примеров и оставьте то, что понравится.</p>
+</div>
+
+<div style="flex-grow: 1; min-height: 0; display: grid; grid-template-columns: 1.1fr 1fr; grid-template-rows: auto repeat(8, minmax(0, 1fr)); border: 1px solid #C9AEB2; border-radius: 10px; overflow: hidden"><div style="padding: 8px 12px; background: #F0D6D7; font-size: 11.5px; font-weight: 500; color: #5A2A35">Канал восприятия и примеры</div><div style="padding: 8px 12px; background: #F0D6D7; font-size: 11.5px; font-weight: 500; color: #5A2A35; border-left: 1px solid #FFFDF7">Что приятно мне</div><div style="padding: 8px 12px; background: #DCE5EB; display: flex; flex-direction: column; justify-content: center; gap: 3px; border-bottom: 1px solid #FFFDF7"><div style="font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 600; line-height: 1.1; color: #3E5A6E">Зрение</div><div style="font-size: 11px; line-height: 1.4; font-style: italic; color: #5A3A40">закат за окном, цветы на столе, фотографии, огонь в камине, красивое кино, бумажная книга, приглушённый свет вечером, цветущие деревья, пазлы</div></div><div style="border-left: 1px solid #E5D3D5; border-bottom: 1px solid #E5D3D5; background: #FFFDF7"></div><div style="padding: 8px 12px; background: #E6E0EE; display: flex; flex-direction: column; justify-content: center; gap: 3px; border-bottom: 1px solid #FFFDF7"><div style="font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 600; line-height: 1.1; color: #4A3B63">Слух</div><div style="font-size: 11px; line-height: 1.4; font-style: italic; color: #5A3A40">любимая музыка, звуки природы, мурчание кота, аудиокнига, шум дождя или прибоя, пение птиц, концерт, кипящий чайник</div></div><div style="border-left: 1px solid #E5D3D5; border-bottom: 1px solid #E5D3D5; background: #FFFDF7"></div><div style="padding: 8px 12px; background: #F5DEDC; display: flex; flex-direction: column; justify-content: center; gap: 3px; border-bottom: 1px solid #FFFDF7"><div style="font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 600; line-height: 1.1; color: #8E3549">Обоняние</div><div style="font-size: 11px; line-height: 1.4; font-style: italic; color: #5A3A40">ароматическая свеча, крем для тела, запах пирога, цветы, чистое постельное бельё, весенний воздух, чай с лимоном</div></div><div style="border-left: 1px solid #E5D3D5; border-bottom: 1px solid #E5D3D5; background: #FFFDF7"></div><div style="padding: 8px 12px; background: #F1E2D6; display: flex; flex-direction: column; justify-content: center; gap: 3px; border-bottom: 1px solid #FFFDF7"><div style="font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 600; line-height: 1.1; color: #7A5A2E">Осязание</div><div style="font-size: 11px; line-height: 1.4; font-style: italic; color: #5A3A40">мягкий плед, шерстяные носки, питомец, тёплая кружка в руках, солнце на лице, тёплый душ или ванна, массаж, месить тесто, лепить, рисовать</div></div><div style="border-left: 1px solid #E5D3D5; border-bottom: 1px solid #E5D3D5; background: #FFFDF7"></div><div style="padding: 8px 12px; background: #F5DEDC; display: flex; flex-direction: column; justify-content: center; gap: 3px; border-bottom: 1px solid #FFFDF7"><div style="font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 600; line-height: 1.1; color: #8E3549">Вкус</div><div style="font-size: 11px; line-height: 1.4; font-style: italic; color: #5A3A40">какао из любимого кафе, сочный апельсин, блинчики, как у мамы, простая домашняя еда, кофе</div></div><div style="border-left: 1px solid #E5D3D5; border-bottom: 1px solid #E5D3D5; background: #FFFDF7"></div><div style="padding: 8px 12px; background: #E3E8D2; display: flex; flex-direction: column; justify-content: center; gap: 3px; border-bottom: 1px solid #FFFDF7"><div style="font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 600; line-height: 1.1; color: #4E5838">Движение</div><div style="font-size: 11px; line-height: 1.4; font-style: italic; color: #5A3A40">прогулка, йога, зарядка, велосипед, игры с ребёнком или питомцем, танцы на кухне, бассейн, домашняя тренировка</div></div><div style="border-left: 1px solid #E5D3D5; border-bottom: 1px solid #E5D3D5; background: #FFFDF7"></div><div style="padding: 8px 12px; background: #EEE8DE; display: flex; flex-direction: column; justify-content: center; gap: 3px; border-bottom: 1px solid #FFFDF7"><div style="font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 600; line-height: 1.1; color: #6B5A44">Положение в пространстве</div><div style="font-size: 11px; line-height: 1.4; font-style: italic; color: #5A3A40">сидеть, поджав ноги, на диване, свернуться калачиком, полежать «звездой», обнять близкого или питомца, посидеть на лавочке</div></div><div style="border-left: 1px solid #E5D3D5; border-bottom: 1px solid #E5D3D5; background: #FFFDF7"></div><div style="padding: 8px 12px; background: #DCE5EB; display: flex; flex-direction: column; justify-content: center; gap: 3px; border-bottom: 1px solid #FFFDF7"><div style="font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 600; line-height: 1.1; color: #3E5A6E">Общение</div><div style="font-size: 11px; line-height: 1.4; font-style: italic; color: #5A3A40">кофе с подругой, обсудить фильм или планы, рассказать, как дела, поделиться радостью, семейный ужин, настольные игры, поблагодарить кого-то</div></div><div style="border-left: 1px solid #E5D3D5; border-bottom: 1px solid #E5D3D5; background: #FFFDF7"></div></div>
+
+<div style="padding: 12px 18px 14px; border-radius: 12px; background: #FDFAF2; border: 1.5px solid {{accent}}; display: flex; flex-direction: column; gap: 4px"><div style="font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 600; line-height: 1.15; color: {{accent}}">Как пользоваться списком</div><div style="font-size: 12px; line-height: 1.5">Держите его под рукой. Возвращайтесь к нему, когда тяжело, когда устали – или заранее, чтобы не устать, а наполниться. Пробуйте разное и добавляйте новое: список может меняться вместе с вами.</div></div>
+
+<div style="margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-top: 9px; border-top: 1px solid {{accent}}; font-size: 12px">
+<span style="white-space: nowrap"><span style="color: #5A3A40">Нутрициолог ·</span> <span style="color: {{accent}}">Мария Тайц</span></span>
+<span style="flex: 1; text-align: center; font-size: 10px; line-height: 1.35; color: #6E4E54"></span>
+<span style="white-space: nowrap; font-family: 'Cormorant Garamond', serif; font-size: 12px; letter-spacing: 0.28em; text-transform: uppercase; color: {{accent}}">Дружить с едой</span>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#B9506A","options":["#B9506A","#C65A6C","#9E3F55"]},"$preview":{"width":794,"height":1123}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#B9506A' };
+  }
+}
+</script>
+</body>
+</html>
