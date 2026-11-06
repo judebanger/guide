@@ -62,7 +62,7 @@ intentionality, not intensity. Then execute with precision:
 - **Motion**: where a design carries animation (CSS in the artboard),
   focus on high-impact moments — one well-orchestrated reveal creates
   more delight than scattered micro-interactions.
-- **Spatial composition**: unexpected layouts. Asymmetry. Overlap.
+- **Spatial composition**: unexpected layouts. Asymmetry. Overlap (never over text).
   Diagonal flow. Grid-breaking elements. Generous negative space OR
   controlled density.
 - **Backgrounds & visual details**: create atmosphere and depth rather

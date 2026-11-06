@@ -70,8 +70,8 @@
   var FLAGS_CAPABILITY = "flags";
 
   // ../../packages/appifact-flags/src/flags.ts
-  function isDeclarableKey(key2) {
-    return APP_FLAG_KEY_RE.test(key2) && !key2.startsWith(RESERVED_FLAG_KEY_PREFIX);
+  function isDeclarableKey(key) {
+    return APP_FLAG_KEY_RE.test(key) && !key.startsWith(RESERVED_FLAG_KEY_PREFIX);
   }
   function declaredKeys(manifest) {
     try {
@@ -157,13 +157,13 @@
   function undeclaredWarner(manifest, warn) {
     const declared = new Set(declaredKeys(manifest));
     const warned = new Set;
-    return (key2) => {
-      if (manifest === undefined || declared.has(key2))
+    return (key) => {
+      if (manifest === undefined || declared.has(key))
         return false;
       try {
-        if (!warned.has(key2) && warned.size < MAX_UNDECLARED_WARNINGS) {
-          warned.add(key2);
-          warn?.(`"${String(key2).slice(0, 72)}" is not declared in ${manifest.key}'s artifact.json (capabilities.flags.keys), so it can never have a value — the read takes its default`);
+        if (!warned.has(key) && warned.size < MAX_UNDECLARED_WARNINGS) {
+          warned.add(key);
+          warn?.(`"${String(key).slice(0, 72)}" is not declared in ${manifest.key}'s artifact.json (capabilities.flags.keys), so it can never have a value — the read takes its default`);
         }
       } catch {}
       return true;
@@ -172,13 +172,13 @@
   function inertFlags(values = {}, manifest, warn) {
     const answered = Object.keys(values).length > 0;
     const undeclared = undeclaredWarner(manifest, warn);
-    function get(key2, fallback) {
+    function get(key, fallback) {
       try {
-        if (undeclared(key2))
+        if (undeclared(key))
           return fallback;
-        if (!Object.prototype.hasOwnProperty.call(values, key2))
+        if (!Object.prototype.hasOwnProperty.call(values, key))
           return fallback;
-        const v = jsonValue(values[key2]);
+        const v = jsonValue(values[key]);
         return v !== undefined && sameKind(v, fallback) ? v : fallback;
       } catch {
         return fallback;
@@ -221,13 +221,13 @@
     try {
       env.setTimeout(() => settleAll({}, false), READY_TIMEOUT_MS);
     } catch {}
-    function get(key2, fallback) {
+    function get(key, fallback) {
       try {
-        if (undeclared(key2))
+        if (undeclared(key))
           return fallback;
-        if (values === null || !Object.prototype.hasOwnProperty.call(values, key2))
+        if (values === null || !Object.prototype.hasOwnProperty.call(values, key))
           return fallback;
-        const v = values[key2];
+        const v = values[key];
         if (!sameKind(v, fallback))
           return fallback;
         const copy = jsonValue(v);
@@ -267,12 +267,12 @@
             return true;
           }
           const taken = {};
-          for (const key2 of Object.keys(data.values)) {
-            if (!isDeclarableKey(key2) || !declared.has(key2))
+          for (const key of Object.keys(data.values)) {
+            if (!isDeclarableKey(key) || !declared.has(key))
               continue;
-            const v = jsonValue(data.values[key2]);
+            const v = jsonValue(data.values[key]);
             if (v !== undefined)
-              taken[key2] = v;
+              taken[key] = v;
           }
           settleAll(taken, true);
           return true;
@@ -405,12 +405,16 @@
     "transient",
     "network",
     "timeout",
+    "first_result_timeout",
     "validation",
     "capability_denied",
     "capability_error",
     "render",
     "internal",
     "user_error",
+    "helper_timeout",
+    "helper_error",
+    "helper_start_timeout",
     "dom_encoding_error",
     "dom_operation_error",
     "dom_not_supported_error",
@@ -624,10 +628,10 @@
     const readyTimeoutMs = (manifest.monitoring.readyTimeoutS ?? READY_TIMEOUT_S.default) * 1000;
     let warnings = 0;
     const warned = new Set;
-    const warnOnce = (key2, message) => {
-      if (warnings >= MAX_WARNINGS || warned.has(key2))
+    const warnOnce = (key, message) => {
+      if (warnings >= MAX_WARNINGS || warned.has(key))
         return;
-      warned.add(key2);
+      warned.add(key);
       warnings += 1;
       try {
         env.warn(message);
@@ -960,7 +964,7 @@ by the same boundary on load.
 <meta name="README" content="Appifact type: Design (canvas). This page is the shared runtime; a canvas’s editable state (artboards, support files, notes, title) lives in its own files, all under project/: the index project/canvas.json and one project/&lt;path> file per artboard — this page carries none, and a canvas is empty only when project/ holds no .dc.html file outside ds/. Canvases are created from this type and inherit its capabilities {&quot;downloads&quot;:{},&quot;artifact&quot;:{},&quot;comments&quot;:{&quot;composer_only&quot;:true,&quot;customAnchors&quot;:true},&quot;room&quot;:{},&quot;db&quot;:{&quot;rules&quot;:[{&quot;path&quot;:&quot;&quot;,&quot;write&quot;:&quot;admin&quot;}]},&quot;assets&quot;:{},&quot;user&quot;:{&quot;scopes&quot;:[&quot;profile&quot;]},&quot;sample&quot;:{},&quot;paste&quot;:{}}. The README comment at the top of head has details.">
 <meta name="appifact-capabilities" content="{&quot;downloads&quot;:{},&quot;artifact&quot;:{},&quot;comments&quot;:{&quot;composer_only&quot;:true,&quot;customAnchors&quot;:true},&quot;room&quot;:{},&quot;db&quot;:{&quot;rules&quot;:[{&quot;path&quot;:&quot;&quot;,&quot;write&quot;:&quot;admin&quot;}]},&quot;assets&quot;:{},&quot;user&quot;:{&quot;scopes&quot;:[&quot;profile&quot;]},&quot;sample&quot;:{},&quot;paste&quot;:{}}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="mega-build-stamp" content="5751e12a3e5787da5cce1e114b8e886f">
+<meta name="mega-build-stamp" content="9ab8a134bb506be501a7678d7ef14c86">
 <meta name="dc-runtime-file" content="artifact-type/dc-runtime.js">
 <meta name="fast-edit-worker-file" content="artifact-type/fast-edit-worker.js">
 <script>try{if(!document.documentElement.getAttribute("data-theme"))document.documentElement.setAttribute("data-theme",matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
