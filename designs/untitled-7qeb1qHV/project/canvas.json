@@ -1,0 +1,27 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-11-12T11:07:12Z"
+ },
+ "title": "Памятка: масла и жиры для жарки",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 794,
+   "h": 1123,
+   "title": "Точка дымления",
+   "paper": "a4"
+  }
+ },
+ "order": [
+  "Main.dc.html"
+ ],
+ "notes": {},
+ "designSystems": []
+}

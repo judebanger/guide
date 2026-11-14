@@ -1,0 +1,54 @@
+{
+  "v": 1,
+  "source": "db",
+  "db": {
+    "meta": "design/meta",
+    "collections": [
+      "design",
+      "boards",
+      "files"
+    ],
+    "cover": {
+      "collection": "boards",
+      "orderField": "boardOrder"
+    }
+  },
+  "files": {
+    "index": "project/canvas.json",
+    "order": "order",
+    "cover": "cover"
+  },
+  "captureFilesListing": true,
+  "captureOmits": [
+    "artifact-type/app.js",
+    "artifact-type/i18n/de-DE.js",
+    "artifact-type/i18n/es-419.js",
+    "artifact-type/i18n/es-ES.js",
+    "artifact-type/i18n/fr-FR.js",
+    "artifact-type/i18n/hi-IN.js",
+    "artifact-type/i18n/id-ID.js",
+    "artifact-type/i18n/it-IT.js",
+    "artifact-type/i18n/ja-JP.js",
+    "artifact-type/i18n/ko-KR.js",
+    "artifact-type/i18n/pt-BR.js",
+    "artifact-type/reference/brand-colors.md",
+    "artifact-type/reference/brand-typography.md",
+    "artifact-type/reference/craft.md",
+    "artifact-type/reference/design-system-components.md",
+    "artifact-type/reference/diagrams.md",
+    "artifact-type/reference/format.md",
+    "artifact-type/reference/google-fonts-families.json",
+    "artifact-type/reference/google-fonts-notices.json",
+    "artifact-type/reference/google-fonts-reserved.json",
+    "artifact-type/reference/make-from-this.md",
+    "artifact-type/reference/print.md",
+    "artifact-type/reference/questions.md",
+    "artifact-type/reference/shaders.md",
+    "artifact-type/reference/view-state.md",
+    "artifact-type/third-party-licenses.js",
+    "SKILL.md",
+    "artifact-type/dc-runtime.js",
+    "artifact-type/fast-edit-worker.js",
+    "artifact-type/fonts/anthropicons-variable.woff2"
+  ]
+}

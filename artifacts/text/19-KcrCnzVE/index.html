@@ -3,6 +3,118 @@
   <head>
     <meta charset="UTF-8" />
     <script>(() => {
+  // ../../../src/lib/platform/arrayCopyMethods.ts
+  var { from } = Array;
+  var { sort } = Array.prototype;
+  var typedProto = Object.getPrototypeOf(Int8Array.prototype);
+  var { keys: typedKeys, sort: typedSort } = typedProto;
+  var typedGetter = (name) => Object.getOwnPropertyDescriptor(typedProto, name).get;
+  var typedLength = typedGetter("length");
+  var typedName = typedGetter(Symbol.toStringTag);
+  var { apply } = Reflect;
+  var { trunc, max, min } = Math;
+  var { Object: toObject, TypeError: TypeErr, RangeError: RangeErr } = globalThis;
+  var typedMakers = {};
+  for (const kind of ["Int8", "Uint8", "Uint8Clamped", "Int16", "Uint16", "Int32", "Uint32", "Float16", "Float32", "Float64", "BigInt64", "BigUint64"]) {
+    typedMakers[`${kind}Array`] = globalThis[`${kind}Array`];
+  }
+  var whole = (value) => trunc(+value) || 0;
+  var sourceOf = (self) => {
+    if (self === null || self === undefined)
+      throw new TypeErr("Array method called on null or undefined");
+    return toObject(self);
+  };
+  var lengthOf = (source) => min(max(whole(source.length), 0), 2 ** 53 - 1);
+  var checkCompare = (compare) => {
+    const kind = typeof compare;
+    if (kind !== "function" && kind !== "undefined")
+      throw new TypeErr("toSorted: the comparator must be a function or undefined");
+  };
+  var placeOf = (index, length) => {
+    const relative = whole(index);
+    return relative < 0 ? length + relative : relative;
+  };
+  var checkPlace = (at, length) => {
+    if (!(at >= 0 && at < length))
+      throw new RangeErr("with: the index is outside the array");
+  };
+  var build = (length, item) => apply(from, undefined, [{ __proto__: null, length }, item]);
+  var typedLengthOf = (self) => {
+    apply(typedKeys, self, []);
+    return apply(typedLength, self, []);
+  };
+  var typedBuild = (self, length, item) => {
+    const out = new typedMakers[apply(typedName, self, [])](length);
+    for (let k = 0;k < length; k++)
+      out[k] = item(k);
+    return out;
+  };
+  function add(proto, methods) {
+    for (const name of Object.getOwnPropertyNames(methods)) {
+      try {
+        if (name === "constructor" || typeof proto[name] === "function")
+          continue;
+        Object.defineProperty(proto, name, { value: methods[name], writable: true, configurable: true, enumerable: false });
+        const hidden = proto[Symbol.unscopables];
+        if (hidden !== undefined && name !== "with")
+          hidden[name] = true;
+      } catch {}
+    }
+  }
+  function installArrayCopyMethods(arrays = Array.prototype, typed = typedProto) {
+    add(arrays, class {
+      toSorted(compare) {
+        checkCompare(compare);
+        const source = sourceOf(this);
+        const out = build(lengthOf(source), (_, k) => source[k]);
+        apply(sort, out, [compare]);
+        return out;
+      }
+      toReversed() {
+        const source = sourceOf(this);
+        const length = lengthOf(source);
+        return build(length, (_, k) => source[length - k - 1]);
+      }
+      toSpliced(start, skipCount, ...items) {
+        const source = sourceOf(this);
+        const length = lengthOf(source);
+        const relative = whole(start);
+        const first = relative < 0 ? max(length + relative, 0) : min(relative, length);
+        const skipped = arguments.length === 1 ? length - first : min(max(whole(skipCount), 0), length - first);
+        const grown = items.length - skipped;
+        if (length + grown > 2 ** 53 - 1)
+          throw new TypeErr("toSpliced: the result would have more than 2^53 - 1 items");
+        return build(length + grown, (_, k) => k < first ? source[k] : k < first + items.length ? items[k - first] : source[k - grown]);
+      }
+      with(index, value) {
+        const source = sourceOf(this);
+        const length = lengthOf(source);
+        const at = placeOf(index, length);
+        checkPlace(at, length);
+        return build(length, (_, k) => k === at ? value : source[k]);
+      }
+    }.prototype);
+    add(typed, class {
+      toSorted(compare) {
+        checkCompare(compare);
+        const out = typedBuild(this, typedLengthOf(this), (k) => this[k]);
+        apply(typedSort, out, [compare]);
+        return out;
+      }
+      toReversed() {
+        const length = typedLengthOf(this);
+        return typedBuild(this, length, (k) => this[length - k - 1]);
+      }
+      with(index, value) {
+        const length = typedLengthOf(this);
+        const at = placeOf(index, length);
+        const converted = typedBuild(this, 1, () => value)[0];
+        checkPlace(at, apply(typedLength, this, []));
+        return typedBuild(this, length, (k) => k === at ? converted : this[k]);
+      }
+    }.prototype);
+  }
+  installArrayCopyMethods();
   // artifact.json
   var key = "pages";
   var monitoring = {
@@ -11,10 +123,273 @@
       "open",
       "edit",
       "sync",
-      "render"
+      "render",
+      "connect"
     ],
     readyTimeoutS: 60
   };
+
+  // ../../../src/editors/lfile/bootKeyStash.ts
+  function armBootKeyStash(win, seams) {
+    var MAX = 64;
+    var MS = 3000;
+    var LIFE = 1e4;
+    var trusted = seams && seams.trusted ? seams.trusted : function(e) {
+      return e.isTrusted === true;
+    };
+    var now = seams && seams.now ? seams.now : function() {
+      return win.performance.now();
+    };
+    var claim = seams && seams.claim ? seams.claim : null;
+    var focused = seams && seams.focused ? seams.focused : null;
+    var admit = seams && seams.admit ? seams.admit : null;
+    var erased = seams && seams.erased ? seams.erased : null;
+    var keepOnPress = !!(seams && seams.keepOnPress === true);
+    var cleared = seams && seams.cleared ? seams.cleared : null;
+    var dialogHolds = !!claim || !!(seams && seams.dialogHolds === true);
+    if (seams && typeof seams.maxMs === "number")
+      MS = seams.maxMs;
+    if (seams && typeof seams.maxChars === "number")
+      MAX = seams.maxChars;
+    var points = !!(seams && seams.points === true);
+    var n = 0;
+    var full = false;
+    var born = claim ? now() : 0;
+    var doc = win.document;
+    var text = "";
+    var first = 0;
+    var refirst = false;
+    var composing = false;
+    var dead = false;
+    var live = true;
+    var clear = function() {
+      text = "";
+      first = 0;
+      dead = false;
+      n = 0;
+      if (cleared)
+        cleared();
+    };
+    var onKey = function(e) {
+      if (claim && now() - born > LIFE)
+        return;
+      if (!live || !trusted(e))
+        return;
+      if (e.repeat === true && e.key !== "Backspace")
+        return;
+      if (focused && focused() !== true)
+        return;
+      var t = e.target;
+      if (t !== doc.body && t !== doc.documentElement && t !== doc && t !== win && !(admit && admit(t, e.key) === true))
+        return;
+      if (dialogHolds) {
+        var dlgs = doc.querySelectorAll("dialog[open], [role=dialog], [role=alertdialog]");
+        for (var d = 0;d < dlgs.length; d++) {
+          var dlg = dlgs[d];
+          if (typeof dlg.getAttribute !== "function")
+            continue;
+          if (dlg.offsetParent == null && !(typeof dlg.getClientRects === "function" && dlg.getClientRects().length > 0))
+            continue;
+          if (dlg.hasAttribute("data-closed"))
+            continue;
+          var modal = dlg.getAttribute("aria-modal");
+          if (modal === "false")
+            continue;
+          if (modal === "true")
+            return;
+          if (dlg.tagName === "DIALOG") {
+            var shownModal = true;
+            try {
+              shownModal = dlg.matches(":modal") === true;
+            } catch {
+              shownModal = true;
+            }
+            if (shownModal)
+              return;
+            continue;
+          }
+          var cds = dlg.getAttribute("data-cds");
+          if (cds === "Dialog" || cds === "ConfirmationDialog")
+            return;
+        }
+      }
+      if (composing || e.isComposing === true || e.keyCode === 229)
+        return;
+      var k = typeof e.key === "string" ? e.key : "";
+      if (k === "Dead") {
+        dead = true;
+        return;
+      }
+      if (k === "Control" || k === "Meta" || k === "Alt" || k === "AltGraph" || k === "Shift" || k === "OS")
+        return;
+      var altGr = typeof e.getModifierState === "function" && e.getModifierState("AltGraph") === true;
+      if (claim && erased && !altGr && (k === "Backspace" || k === "Delete") && (e.ctrlKey === true || e.metaKey === true || e.altKey === true))
+        erased("chord");
+      if (!altGr && (e.ctrlKey === true || e.metaKey === true))
+        return clear();
+      if (!altGr && e.altKey === true) {
+        dead = false;
+        return;
+      }
+      if (k === "Backspace") {
+        dead = false;
+        if (claim && text === "" && erased)
+          erased("empty");
+        if (claim && (text === "" || n >= MAX || now() - first > MS))
+          return;
+        if (claim)
+          claim(e);
+        var lo = text.charCodeAt(text.length - 1);
+        text = text.slice(0, points && text.length > 1 && lo >= 56320 && lo <= 57343 ? -2 : -1);
+        if (n > 0)
+          n--;
+        return;
+      }
+      var hi = k.charCodeAt(0);
+      var add = k.length === 1 || points && k.length === 2 && hi >= 55296 && hi <= 56319 ? k : k === "Enter" ? `
+` : "";
+      if (add === "")
+        return;
+      if (dead) {
+        dead = false;
+        return;
+      }
+      var at = now();
+      if (text === "" || refirst) {
+        first = at;
+        refirst = false;
+      }
+      if (n >= MAX || at - first > MS) {
+        if (n >= MAX)
+          full = true;
+        return;
+      }
+      text += add;
+      n++;
+      if (claim)
+        claim(e);
+    };
+    var onPress = function() {
+      if (live)
+        clear();
+    };
+    var onCompStart = function() {
+      if (live) {
+        composing = true;
+        clear();
+      }
+    };
+    var onCompEnd = function() {
+      composing = false;
+    };
+    var cap = { capture: true, passive: true };
+    var keyCap = { capture: true, passive: !claim };
+    var presses = keepOnPress ? ["paste"] : ["pointerdown", "mousedown", "touchstart", "paste"];
+    win.addEventListener("keydown", onKey, keyCap);
+    for (var i = 0;i < presses.length; i++)
+      win.addEventListener(presses[i], onPress, cap);
+    win.addEventListener("compositionstart", onCompStart, cap);
+    win.addEventListener("compositionend", onCompEnd, cap);
+    win.__lfileBootKeys = {
+      take: function() {
+        live = false;
+        win.removeEventListener("keydown", onKey, keyCap);
+        for (var j = 0;j < presses.length; j++)
+          win.removeEventListener(presses[j], onPress, cap);
+        win.removeEventListener("compositionstart", onCompStart, cap);
+        win.removeEventListener("compositionend", onCompEnd, cap);
+        var out = text;
+        text = "";
+        return out;
+      },
+      first: function() {
+        return text === "" ? -1 : first;
+      },
+      full: function() {
+        return full;
+      },
+      renew: function() {
+        if (!claim)
+          return;
+        born = now();
+        if (text !== "") {
+          first = born;
+          refirst = true;
+        }
+      }
+    };
+  }
+
+  // ../../../src/editors/lfile/coldOpen/pageBootKeys.ts
+  function armPageBootKeys(win, stash, seams) {
+    var LIFE = 1e4;
+    if (!win || win.__pagesBootKeys)
+      return;
+    var doc = win.document;
+    var face = {
+      document: doc,
+      performance: win.performance,
+      addEventListener: function(t, fn, o) {
+        win.addEventListener(t, fn, o);
+      },
+      removeEventListener: function(t, fn, o) {
+        win.removeEventListener(t, fn, o);
+      }
+    };
+    var focused = function() {
+      return typeof doc.hasFocus === "function" && doc.hasFocus() === true;
+    };
+    var test = seams || {};
+    stash(face, { trusted: test.trusted, now: test.now, focused, keepOnPress: true, maxMs: 1e4, maxChars: 1024, points: true, dialogHolds: true });
+    var handle = face.__lfileBootKeys;
+    if (!handle)
+      return;
+    var gone = false;
+    var blurredFirst = -1;
+    var onBlur = function() {
+      var f = gone ? -1 : handle.first();
+      if (f >= 0)
+        blurredFirst = f;
+    };
+    var letGo = function() {
+      if (gone)
+        return "";
+      gone = true;
+      win.clearTimeout(timer);
+      win.removeEventListener("blur", onBlur);
+      try {
+        delete win.__pagesBootKeys;
+      } catch {
+        win.__pagesBootKeys = undefined;
+      }
+      return handle.take();
+    };
+    var timer = win.setTimeout(function() {
+      if (gone)
+        return;
+      letGo();
+      try {
+        win.performance.mark("pages:bootKeysDropped");
+      } catch {}
+    }, LIFE);
+    win.addEventListener("blur", onBlur);
+    win.__pagesBootKeys = {
+      take: letGo,
+      first: function() {
+        return gone ? -1 : handle.first();
+      },
+      full: function() {
+        return !gone && handle.full() === true;
+      },
+      blurred: function() {
+        return !gone && blurredFirst >= 0 && handle.first() === blurredFirst;
+      },
+      path: String(win.location && win.location.pathname || ""),
+      discard: function() {
+        letGo();
+      }
+    };
+  }
 
   // ../../../src/lib/thrownKind.ts
   var closed = (words) => {
@@ -123,7 +498,7 @@
     };
   }
 
-  // ../../../tools/appifact/appifact-health/src/vocabulary.ts
+  // ../../../vendor/appifact-health/src/vocabulary.ts
   var CORE_ACTIONS = [
     "save",
     "open",
@@ -139,7 +514,10 @@
     "upload",
     "download",
     "generate",
-    "connect"
+    "connect",
+    "insert",
+    "delete",
+    "reorder"
   ];
   var OUTCOMES = ["success", "failure", "aborted"];
   var ERROR_TYPE_RE = /^[a-z][a-z0-9_]{0,31}$/;
@@ -152,12 +530,23 @@
     "transient",
     "network",
     "timeout",
+    "first_result_timeout",
     "validation",
     "capability_denied",
     "capability_error",
     "render",
     "internal",
     "user_error",
+    "helper_timeout",
+    "helper_error",
+    "helper_start_timeout",
+    "helper_init_timeout",
+    "dom_encoding_error",
+    "dom_operation_error",
+    "dom_not_supported_error",
+    "dom_invalid_state_error",
+    "dom_quota_exceeded_error",
+    "dom_security_error",
     "unknown"
   ];
   var KNOWN_ERROR_TYPES = new Set([
@@ -188,9 +577,10 @@
   var READY_TIMEOUT_S = { min: 5, max: 120, default: 20 };
   var WINDOW_MS = 15000;
   var MAX_REPORTS_PER_ACTION_PER_WINDOW = 1000;
-  var SENTINEL = "appifact-health:v1";
+  var SENTINEL = "appifact-health:v2";
+  var HEALTH_GLOBAL = "__appifact_health";
 
-  // ../../../tools/appifact/appifact-health/src/health.ts
+  // ../../../vendor/appifact-health/src/health.ts
   var UNSUPPORTED_FALLBACK_MS = 8000;
   function awaitsUnsupportedVerdict(page, fileHref) {
     try {
@@ -201,6 +591,17 @@
         return false;
       const url = new URL(fileHref);
       return url.origin === page.origin && url.pathname.startsWith(`/_f/${ver}/`);
+    } catch {
+      return false;
+    }
+  }
+  function failedLinkIsCrash(link, origin) {
+    if (/(^|\s)(stylesheet|modulepreload)(\s|$)/i.test(link.rel))
+      return true;
+    if (!/(^|\s)preload(\s|$)/i.test(link.rel) || link.as !== "font")
+      return false;
+    try {
+      return new URL(link.href).origin === origin;
     } catch {
       return false;
     }
@@ -325,6 +726,7 @@
       ready() {},
       report() {},
       crash() {},
+      replay() {},
       track: runTracked(() => {})
     };
   }
@@ -363,7 +765,7 @@
     };
     let windowCounts = new Map;
     let windowTimer = null;
-    const send = (action, outcome, errorType) => {
+    const send = (action, outcome, errorType, replayed) => {
       try {
         if (action !== "load" && action !== "ready" && action !== "crash") {
           const count = windowCounts.get(action) ?? 0;
@@ -386,25 +788,29 @@
             alertChannel,
             action,
             outcome,
-            ...errorType !== undefined && { errorType }
+            ...errorType !== undefined && { errorType },
+            ...replayed && { replayed }
           }
         });
       } catch {}
     };
-    let readySettled = false;
+    let readyOutcome = null;
     const crashes = new Set;
     let readyTimer = null;
     let readyLeftMs = readyTimeoutMs;
     let readyArmedAt = 0;
+    const settleReady = (outcome, errorType) => {
+      readyOutcome = { outcome, ...errorType !== undefined && { errorType } };
+      send("ready", outcome, errorType);
+    };
     const onReadyTimeout = () => {
       readyTimer = null;
-      if (readySettled)
+      if (readyOutcome !== null)
         return;
-      readySettled = true;
-      send("ready", "failure", crashes.size > 0 ? "threw_before_ready" : "timeout");
+      settleReady("failure", crashes.size > 0 ? "threw_before_ready" : "timeout");
     };
     const armReadyTimer = () => {
-      if (readySettled || readyTimer !== null)
+      if (readyOutcome !== null || readyTimer !== null)
         return;
       readyArmedAt = env.now();
       readyTimer = env.setTimeout(onReadyTimeout, readyLeftMs);
@@ -465,16 +871,15 @@
     return {
       version: SENTINEL,
       ready() {
-        if (readySettled)
+        if (readyOutcome !== null)
           return;
-        readySettled = true;
         if (readyTimer !== null) {
           try {
             env.clearTimeout(readyTimer);
           } catch {}
           readyTimer = null;
         }
-        send("ready", "success");
+        settleReady("success");
       },
       report,
       track: runTracked(report),
@@ -483,25 +888,39 @@
           return;
         crashes.add(errorType);
         send("crash", "failure", errorType);
-        if (errorType === "unsupported_browser" && !readySettled) {
-          readySettled = true;
+        if (errorType === "unsupported_browser" && readyOutcome === null) {
           if (readyTimer !== null) {
             try {
               env.clearTimeout(readyTimer);
             } catch {}
             readyTimer = null;
           }
-          send("ready", "failure", "unsupported_browser");
+          settleReady("failure", "unsupported_browser");
+        }
+      },
+      replay() {
+        send("load", "success", undefined, true);
+        for (const type of crashes)
+          send("crash", "failure", type, true);
+        if (readyOutcome !== null) {
+          send("ready", readyOutcome.outcome, readyOutcome.errorType, true);
         }
       }
     };
   }
 
-  // ../../../tools/appifact/appifact-health/src/index.ts
+  // ../../../vendor/appifact-health/src/index.ts
   var installed = null;
   var installedKey = null;
   var warnedSecondInit = false;
   function init(manifest) {
+    const handle = install(manifest);
+    try {
+      globalThis[HEALTH_GLOBAL] = handle;
+    } catch {}
+    return handle;
+  }
+  function install(manifest) {
     if (installed !== null) {
       if (installedKey !== manifest?.key && !warnedSecondInit) {
         warnedSecondInit = true;
@@ -531,6 +950,7 @@
       warn
     });
     wireCrashes((type) => engine.crash(type));
+    wirePoke(() => engine.replay());
     installed = engine;
     return installed;
   }
@@ -543,6 +963,20 @@
   }
   function post(message) {
     window.parent.postMessage(message, "*");
+  }
+  function wirePoke(replay) {
+    try {
+      window.addEventListener("message", (event) => {
+        try {
+          if (event.source !== window.parent)
+            return;
+          const data = event.data;
+          if (typeof data === "object" && data !== null && data.__frame_health_poke === true) {
+            replay();
+          }
+        } catch {}
+      });
+    } catch {}
   }
   function warn(message) {
     try {
@@ -580,7 +1014,7 @@
             return;
           }
           const target = event.target;
-          if (target instanceof HTMLScriptElement || target instanceof HTMLLinkElement && /(^|\s)(stylesheet|modulepreload)(\s|$)/i.test(target.rel)) {
+          if (target instanceof HTMLScriptElement || target instanceof HTMLLinkElement && failedLinkIsCrash(target, location.origin)) {
             const href = target instanceof HTMLScriptElement ? target.src : target.href;
             gate.fail(awaitsUnsupportedVerdict(page(), href));
           }
@@ -767,12 +1201,188 @@
     } catch {}
   }
 
+  // src/openStop.ts
+  function openStopOf(at) {
+    const has = (mark) => at(mark) >= 0;
+    if (!has("app"))
+      return has("runtimeAsk") ? "timeout" : "chunk_load";
+    if (!has("opened"))
+      return "capability_error";
+    if (!has("fence"))
+      return "first_result_timeout";
+    if (!has("snapshot"))
+      return "render";
+    const gone = at("editorFrameDiscard:");
+    const live = (mark) => at(mark) > gone;
+    if (live("runtimePost"))
+      return "helper_init_timeout";
+    if (live("editorFrameLoaded"))
+      return has("runtimeWarm") ? "helper_error" : has("runtimeSilent") ? "helper_timeout" : "network";
+    return has("editorFrameCreated") && at("editorFrameCreated") >= gone ? "helper_start_timeout" : "render";
+  }
+  var RESUME_FLOOR_MS = 1000;
+  function armOpenStop(d) {
+    let over = false;
+    let left = d.afterMs;
+    let since = 0;
+    let drop = null;
+    const run = () => {
+      if (over || drop !== null)
+        return;
+      since = d.now();
+      drop = d.schedule(() => {
+        drop = null;
+        if (over)
+          return;
+        over = true;
+        try {
+          if (d.unsupported())
+            return;
+          d.mark("openStop");
+          if (d.at("openStop") >= 0)
+            d.say(openStopOf(d.at));
+        } catch {}
+      }, left);
+    };
+    const pause = () => {
+      if (drop === null)
+        return;
+      drop();
+      drop = null;
+      left = Math.max(RESUME_FLOOR_MS, left - (d.now() - since));
+    };
+    try {
+      d.onVisibilityChange(() => {
+        try {
+          if (d.visible())
+            run();
+          else
+            pause();
+        } catch {}
+      });
+      if (d.visible())
+        run();
+    } catch {
+      try {
+        run();
+      } catch {}
+    }
+    const stop = () => {
+      over = true;
+      try {
+        drop?.();
+      } catch {}
+      drop = null;
+    };
+    let heard = false;
+    try {
+      const ready = d.handle.ready.bind(d.handle);
+      const wrapped = () => {
+        stop();
+        ready();
+      };
+      d.handle.ready = wrapped;
+      heard = d.handle.ready === wrapped;
+    } catch {}
+    if (!heard)
+      stop();
+  }
+
+  // src/styleRescue.ts
+  var STYLE_DELAYS_MS = [1000, 2000, 4000, 8000, 15000, 30000];
+  var STYLE_JITTER = 0.3;
+  var STYLE_MAX_ASKS = STYLE_DELAYS_MS.length;
+  var STYLE_MAX_TOTAL = 3 * STYLE_MAX_ASKS;
+  var STYLE_MAX_LINKS = 4;
+  function armStyleRescue(d) {
+    let out = [];
+    let asks = 0;
+    let total = 0;
+    let drop = null;
+    const yes = (fn, unread) => {
+      try {
+        return fn();
+      } catch {
+        return unread;
+      }
+    };
+    const may = () => yes(d.loaded, false) && yes(d.visible, false) && !yes(d.judged, true);
+    const look = () => {
+      drop = null;
+      if (out.length === 0 || !may())
+        return;
+      asks += 1;
+      total += 1;
+      const links = out;
+      out = [];
+      for (const link of links) {
+        try {
+          d.again(link);
+        } catch {}
+      }
+    };
+    const wait = () => {
+      try {
+        drop?.();
+        drop = null;
+        if (out.length === 0 || asks >= STYLE_MAX_ASKS || total >= STYLE_MAX_TOTAL || !may())
+          return;
+        drop = d.schedule(look, Math.max(0, Math.round(STYLE_DELAYS_MS[asks] * (1 + STYLE_JITTER * (2 * d.random() - 1)))));
+      } catch {}
+    };
+    const afresh = () => {
+      asks = 0;
+      wait();
+    };
+    try {
+      d.on("error", (ev) => {
+        try {
+          const el = ev.target;
+          if (el?.tagName !== "LINK" || typeof el.rel !== "string" || !/(^|\s)stylesheet(\s|$)/i.test(el.rel))
+            return;
+          if (typeof el.href !== "string" || !el.href.startsWith(d.root))
+            return;
+          if (out.length >= STYLE_MAX_LINKS || out.includes(el))
+            return;
+          out.push(el);
+          if (drop === null)
+            wait();
+        } catch {}
+      });
+      d.on("load", () => void (drop === null && wait()));
+      d.on("visibilitychange", () => yes(d.visible, false) ? afresh() : wait());
+      d.on("online", afresh);
+    } catch {}
+  }
+
   // src/health.ts
-  var HEALTH_GLOBAL = "__appifact_health";
   var foreignCrashes = sortForeignCrashes(window);
   var health = init({ key, monitoring });
   foreignCrashes.attach(health);
-  globalThis[HEALTH_GLOBAL] ??= health;
+  armOpenStop({
+    afterMs: monitoring.readyTimeoutS * 1000,
+    visible: () => document.visibilityState !== "hidden",
+    onVisibilityChange: (fn) => document.addEventListener("visibilitychange", fn),
+    now: () => performance.now(),
+    schedule: (fn, ms) => {
+      const t = setTimeout(fn, ms);
+      return () => clearTimeout(t);
+    },
+    at: (mark) => {
+      let last = -1;
+      for (const { name, startTime } of performance.getEntriesByType("mark"))
+        if (mark.endsWith(":") ? name.startsWith(`pages:${mark}`) : name === `pages:${mark}`)
+          last = Math.max(last, startTime);
+      return last;
+    },
+    mark: (name) => void performance.mark(`pages:${name}`),
+    unsupported: () => document.documentElement.hasAttribute("data-frame-unsupported"),
+    handle: health,
+    say: (stop) => {
+      health.report("render", "failure", stop);
+      performance.mark(`pages:openStopSaid:${stop}`);
+    }
+  });
   armBootFilesRescue({
     root: `${location.origin}/`,
     self: location.href,
@@ -793,8 +1403,25 @@
     store: () => sessionStorage,
     say: () => health.report("open", "aborted")
   });
+  armStyleRescue({
+    root: `${location.origin}/`,
+    on: (type, fn) => (type === "visibilitychange" ? document : window).addEventListener(type, fn, true),
+    loaded: () => document.readyState === "complete",
+    visible: () => document.visibilityState !== "hidden",
+    judged: () => document.documentElement.hasAttribute("data-frame-refused-watch") || document.documentElement.hasAttribute("data-frame-unsupported"),
+    schedule: (fn, ms) => {
+      const t = setTimeout(fn, ms);
+      return () => clearTimeout(t);
+    },
+    random: () => Math.random(),
+    again: (link) => link.replaceWith(link.cloneNode(false))
+  });
+  try {
+    armPageBootKeys(window, armBootKeyStash);
+  } catch {}
 })();</script>
-    <link rel="preload" as="fetch" type="font/woff2" href="./artifact-type/fonts/AnthropicSans-Roman-Web.1b75c8ee81a05fa7.woff2" crossorigin>
+    <link rel="preload" as="fetch" type="font/woff2" href="./artifact-type/fonts/AnthropicSansMicro-Text-Web.b4415bf251f15ee7.woff2" crossorigin>
+    <meta http-equiv="Content-Security-Policy" content="frame-src 'self'" />
     <style>
       /* This page never scrolls; a Doc scrolls inside the editor's iframe. If the page's overflow changes after load, an invisible scrollbar can
          come back and take swipes at the right edge in the Claude iOS app, so keep height and overflow equal to MIRROR_CSS's html rule in
@@ -807,17 +1434,19 @@
     </style>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Claude Docs</title>
-    <meta name="appifact-capabilities" content="{&quot;user&quot;:{&quot;scopes&quot;:[&quot;profile&quot;]},&quot;assets&quot;:{},&quot;sample&quot;:{},&quot;room&quot;:{},&quot;downloads&quot;:{},&quot;dictation&quot;:{},&quot;tts&quot;:{},&quot;comments&quot;:{&quot;customAnchors&quot;:true,&quot;headless&quot;:true},&quot;mcp&quot;:{&quot;servers&quot;:[{&quot;server&quot;:&quot;Google Drive&quot;,&quot;tools&quot;:[&quot;create_file&quot;,&quot;gdrive_upload&quot;]},{&quot;server&quot;:&quot;Claude Docs&quot;,&quot;tools&quot;:[&quot;export&quot;]},{&quot;server&quot;:&quot;Notion&quot;,&quot;tools&quot;:[&quot;notion-create-pages&quot;]}]},&quot;flags&quot;:{&quot;keys&quot;:[&quot;appifact_bottom_toolbar&quot;,&quot;appifact_icon_set&quot;,&quot;pages_kestrel_scar&quot;,&quot;pages_linnet_combe&quot;,&quot;pages_nightjar_tor&quot;,&quot;pages_phalarope_breccia&quot;,&quot;pages_redshank_machair&quot;,&quot;pages_sanderling_drumlin&quot;,&quot;pages_siskin_wold&quot;,&quot;pages_whimbrel_esker&quot;,&quot;pages_wren_tarn&quot;,&quot;tidal_glowing_ember&quot;]},&quot;artifact&quot;:{&quot;publish&quot;:false}}" />
-    <script type="module" async crossorigin fetchpriority="high" src="./artifact-type/hello-early-BiZPEUet.js"></script>
-    <script type="module" crossorigin src="./artifact-type/index-CWxDKE4F.js"></script>
-    <link rel="modulepreload" crossorigin href="./artifact-type/rolldown-runtime-QTnfLwEv.js">
-    <link rel="modulepreload" crossorigin href="./artifact-type/preload-JwdpM2S5.js">
-    <link rel="modulepreload" crossorigin href="./artifact-type/hello-early-BiZPEUet.js">
-    <link rel="modulepreload" crossorigin href="./artifact-type/app-core-jKXME9w3.js">
-    <link rel="modulepreload" crossorigin href="./artifact-type/cds-CSS_bBsE.js">
-    <link rel="modulepreload" crossorigin href="./artifact-type/react-BQskslbE.js">
-    <link rel="modulepreload" crossorigin href="./artifact-type/ref-chips-CtZX4tQD.js">
-    <link rel="stylesheet" crossorigin href="./artifact-type/index-MrqKExKr.css">
+    <meta name="appifact-capabilities" content="{&quot;user&quot;:{&quot;scopes&quot;:[&quot;profile&quot;]},&quot;assets&quot;:{},&quot;sample&quot;:{},&quot;room&quot;:{},&quot;downloads&quot;:{},&quot;dictation&quot;:{},&quot;tts&quot;:{},&quot;comments&quot;:{&quot;customAnchors&quot;:true,&quot;headless&quot;:true},&quot;mcp&quot;:{&quot;servers&quot;:[{&quot;server&quot;:&quot;Google Drive&quot;,&quot;tools&quot;:[&quot;create_file&quot;,&quot;gdrive_upload&quot;]},{&quot;server&quot;:&quot;Claude Docs&quot;,&quot;tools&quot;:[&quot;export&quot;]},{&quot;server&quot;:&quot;Notion&quot;,&quot;tools&quot;:[&quot;notion-create-pages&quot;]}]},&quot;flags&quot;:{&quot;keys&quot;:[&quot;appifact_bottom_toolbar&quot;,&quot;appifact_icon_set&quot;,&quot;claudified_chipper_teacup&quot;,&quot;claudified_tidy_lantern&quot;,&quot;pages_bittern_reed&quot;,&quot;pages_godwit_strath&quot;,&quot;pages_kestrel_scar&quot;,&quot;pages_linnet_combe&quot;,&quot;pages_nightjar_tor&quot;,&quot;pages_phalarope_breccia&quot;,&quot;pages_redshank_machair&quot;,&quot;pages_sanderling_drumlin&quot;,&quot;pages_siskin_wold&quot;,&quot;pages_whimbrel_esker&quot;,&quot;pages_wren_tarn&quot;,&quot;tidal_glowing_ember&quot;]},&quot;artifact&quot;:{&quot;publish&quot;:false}}" />
+    <meta name="docs-release-commit" content="82350cfa22d6a9a8d8d7c83a4c4da583da971b05" />
+    <meta name="docs-editor-runtime" content="./artifact-type/lfile-runtime.0e773c86.js" />
+    <script type="module" async crossorigin fetchpriority="high" src="./artifact-type/82350cfa22d6/hello-early.js"></script>
+    <script type="module" crossorigin src="./artifact-type/82350cfa22d6/index.js"></script>
+    <link rel="modulepreload" crossorigin href="./artifact-type/82350cfa22d6/rolldown-runtime.js">
+    <link rel="modulepreload" crossorigin href="./artifact-type/82350cfa22d6/preload.js">
+    <link rel="modulepreload" crossorigin href="./artifact-type/82350cfa22d6/hello-early.js">
+    <link rel="modulepreload" crossorigin href="./artifact-type/82350cfa22d6/app-core.js">
+    <link rel="modulepreload" crossorigin href="./artifact-type/82350cfa22d6/cds.js">
+    <link rel="modulepreload" crossorigin href="./artifact-type/82350cfa22d6/react.js">
+    <link rel="modulepreload" crossorigin href="./artifact-type/82350cfa22d6/ref-chips.js">
+    <link rel="stylesheet" crossorigin href="./artifact-type/index-CjzRUYuZ.css">
   </head>
   <body>
     <div id="root"></div>

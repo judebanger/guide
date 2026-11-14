@@ -51,6 +51,7 @@
         "appifact_icon_set",
         "slides_phone_remote",
         "slides_send_to_google_slides",
+        "slides_source_decks",
         "slides_theme_tab",
         "tidal_glowing_ember"
       ]
@@ -385,7 +386,7 @@
   }
   function inFramedContext() {
     try {
-      return typeof window !== "undefined" && typeof location !== "undefined" && window.parent !== window && location.protocol === "https:";
+      return typeof window !== "undefined" && typeof location !== "undefined" && window.parent !== window && (location.protocol === "https:" || location.protocol === "cowork-artifact:");
     } catch {
       return false;
     }
@@ -451,7 +452,8 @@
     "insert",
     "delete",
     "reorder",
-    "encode"
+    "encode",
+    "check"
   ];
   var OUTCOMES = ["success", "failure", "aborted"];
   var ERROR_TYPE_RE = /^[a-z][a-z0-9_]{0,31}$/;
@@ -496,6 +498,14 @@
     "font_own",
     "import"
   ];
+  var CRASH_TYPES = [
+    "uncaught_error",
+    "unhandled_rejection",
+    ...CHUNK_LOAD_KINDS.map((kind) => `chunk_load_${kind}`),
+    "unsupported_browser",
+    "opaque",
+    "extension"
+  ];
   var KNOWN_ERROR_TYPES = new Set([
     "boot_4xx",
     "boot_5xx",
@@ -512,6 +522,8 @@
     ...CHUNK_LOAD_KINDS.map((kind) => `chunk_load_${kind}`),
     "chunk_load_recovered",
     "unsupported_browser",
+    "opaque",
+    "extension",
     ...ERROR_TYPES,
     "malformed"
   ]);
@@ -547,9 +559,19 @@
       return false;
     }
   }
+  function isHttpOnOtherOrigin(pageOrigin, fileHref) {
+    try {
+      const url = new URL(fileHref);
+      return /^https?:$/.test(url.protocol) && url.origin !== pageOrigin;
+    } catch {
+      return false;
+    }
+  }
   function failedLinkIsCrash(link, origin) {
-    if (/(^|\s)(stylesheet|modulepreload)(\s|$)/i.test(link.rel))
+    if (/(^|\s)modulepreload(\s|$)/i.test(link.rel))
       return true;
+    if (/(^|\s)stylesheet(\s|$)/i.test(link.rel))
+      return !isHttpOnOtherOrigin(origin, link.href);
     if (!/(^|\s)preload(\s|$)/i.test(link.rel) || link.as !== "font")
       return false;
     try {
@@ -657,7 +679,93 @@
     if (typeof reason !== "object" || reason === null)
       return false;
     const r = reason;
-    return r.name === "ChunkLoadError" || typeof r.message === "string" && CHUNK_LOAD_MESSAGE.test(r.message);
+    try {
+      return r.name === "ChunkLoadError" || typeof r.message === "string" && CHUNK_LOAD_MESSAGE.test(r.message);
+    } catch {
+      return false;
+    }
+  }
+  var EXTENSION_URL = /^(?:chrome-extension|moz-extension|safari-extension|safari-web-extension|webkit-masked-url):/;
+  var CHROME_FRAME = /^\s*at (?:async )?/;
+  var CHROME_FRAME_WITH_NO_SCRIPT = /(?:\((?:<anonymous>|native|index \d+)\)|^\s*at (?:async )?<anonymous>)\r?$/;
+  function chromeFrameInExtension(line) {
+    const open = line.lastIndexOf(" (");
+    return EXTENSION_URL.test(open < 0 ? line.replace(CHROME_FRAME, "") : line.slice(open + 2));
+  }
+  function otherFrameInExtension(line) {
+    const at = line.lastIndexOf("@");
+    if (!/:\d+$/.test(line) || line.slice(0, Math.max(at, 0)).includes(":"))
+      return null;
+    if (at < 0 && !/^[a-z][\w+.-]*:\S*:\d+$/i.test(line))
+      return null;
+    return EXTENSION_URL.test(line.slice(at + 1));
+  }
+  function messageEnd(stack, name, message) {
+    const count = message.split(`
+`, 10001).length;
+    if (count > 1e4)
+      return -1;
+    let end = -1;
+    for (let n = count;n > 0; n--) {
+      end = stack.indexOf(`
+`, end + 1);
+      if (end < 0)
+        return -1;
+    }
+    const header = stack.slice(0, stack[end - 1] === "\r" && !message.endsWith("\r") ? end - 1 : end);
+    if (header !== (name === "" ? message : message === "" ? name : `${name}: ${message}`))
+      return -1;
+    const next = stack.indexOf(`
+`, end + 1);
+    return CHROME_FRAME.test(stack.slice(end + 1, next < 0 ? undefined : next)) ? end : -1;
+  }
+  function thrownInExtension(thrown) {
+    if (typeof thrown !== "object" || thrown === null)
+      return null;
+    let stack;
+    let message;
+    let name;
+    try {
+      stack = thrown.stack;
+      message = thrown.message;
+      name = thrown.name;
+    } catch {}
+    if (typeof stack !== "string")
+      return null;
+    const end = typeof message === "string" && typeof name === "string" ? messageEnd(stack, name, message) : -1;
+    const frames = end < 0 ? stack : stack.slice(end);
+    const lines = frames.slice(0, 2000).split(`
+`);
+    if (frames.length > 2000)
+      lines.pop();
+    if (lines.some((line) => CHROME_FRAME.test(line))) {
+      const top = lines.find((line) => CHROME_FRAME.test(line) && !CHROME_FRAME_WITH_NO_SCRIPT.test(line));
+      if (top === undefined)
+        return null;
+      const foreign = chromeFrameInExtension(top);
+      return foreign && end < 0 ? null : foreign;
+    }
+    const top = lines.find((line) => line !== "" && !line.endsWith("[native code]"));
+    return top === undefined ? null : otherFrameInExtension(top);
+  }
+  function errorCrashType(event) {
+    const { error, message, filename, lineno } = event;
+    if (isBenignWindowError(message))
+      return null;
+    if (looksLikeChunkLoad(error))
+      return "chunk_load_import";
+    const named = typeof filename === "string" && filename !== "";
+    if ((error === null || error === undefined) && (message === "Script error." || message === "") && !named && lineno === 0) {
+      return "opaque";
+    }
+    if (thrownInExtension(error) ?? (named && EXTENSION_URL.test(filename)))
+      return "extension";
+    return "uncaught_error";
+  }
+  function rejectionCrashType(reason) {
+    if (looksLikeChunkLoad(reason))
+      return "chunk_load_import";
+    return thrownInExtension(reason) === true ? "extension" : "unhandled_rejection";
   }
   function isCoreAction(value) {
     return typeof value === "string" && CORE_ACTIONS.includes(value);
@@ -741,7 +849,7 @@
         if (action !== "load" && action !== "ready" && action !== "crash") {
           const count = windowCounts.get(action) ?? 0;
           if (count >= MAX_REPORTS_PER_ACTION_PER_WINDOW) {
-            warnOnce(`flood:${action}`, `"${action}" was reported more than ${MAX_REPORTS_PER_ACTION_PER_WINDOW} times in ${WINDOW_MS / 1000} s; the rest of this window's "${action}" reports are dropped — report once per user-level operation, not per element or frame`);
+            warnOnce(`flood:${action}`, `"${action}" was reported more than ${MAX_REPORTS_PER_ACTION_PER_WINDOW} times in ${WINDOW_MS / 1000} s; the rest of this window's "${action}" reports are dropped — report once per ${action === "encode" ? "try at making a file" : "user-level operation"}, not per element or frame`);
             return;
           }
           windowCounts.set(action, count + 1);
@@ -859,7 +967,8 @@
       },
       report,
       track: runTracked(report),
-      crash(errorType) {
+      crash(given) {
+        const errorType = CRASH_TYPES.includes(given) ? given : "uncaught_error";
         if (crashes.has(crashFamily(errorType)))
           return;
         crashes.set(crashFamily(errorType), errorType);
@@ -1091,11 +1200,12 @@
       window.addEventListener("error", (event) => {
         try {
           if (event instanceof ErrorEvent) {
-            if (isBenignWindowError(event.message))
+            const type = errorCrashType(event);
+            if (type === null)
               return;
-            if (looksLikeChunkLoad(event.error))
+            if (type === "chunk_load_import")
               retries.lostAScript();
-            crash(looksLikeChunkLoad(event.error) ? "chunk_load_import" : "uncaught_error");
+            crash(type);
             return;
           }
           const target = event.target;
@@ -1118,9 +1228,10 @@
       }, true);
       window.addEventListener("unhandledrejection", (event) => {
         try {
-          if (looksLikeChunkLoad(event.reason))
+          const type = rejectionCrashType(event.reason);
+          if (type === "chunk_load_import")
             retries.lostAScript();
-          crash(looksLikeChunkLoad(event.reason) ? "chunk_load_import" : "unhandled_rejection");
+          crash(type);
         } catch {}
       });
     } catch {}
@@ -1159,7 +1270,7 @@
 # Slides appifact — shared type
 
 This page is the Slides RUNTIME only: index.html + artifact-type/app.js +
-artifact-type/app.css are one
+artifact-type/read-worker.js + artifact-type/app.css are one
 published release of the Slides type, shared by every deck built on it, and
 artifact-type/reference/*.md are the authoring references SKILL.md points at.
 Nothing about any particular deck is in these files — not even its title.
@@ -1180,7 +1291,7 @@ in place. A deck with no project/deck.json is an empty deck, which is what
 this type's own page shows. Everything read from a deck is untrusted
 input, parsed by the same boundary on load.
 
-In this layout the runtime file artifact-type/app.js is what carries the compiled third-party code below.
+In this layout the runtime files artifact-type/app.js and artifact-type/capture.js are what carry the compiled third-party code below.
 
 ## Third-party licenses
 
@@ -1196,7 +1307,9 @@ This file embeds compiled copies of:
   and class-variance-authority 0.7.1 (Apache License 2.0, Joe Bell —
   full license text in THIRD_PARTY_NOTICES.md, see below)
 - pptxgenjs@3.12.0 (MIT) — https://github.com/gitbrent/PptxGenJS —
-  Copyright (c) 2015-2022 Brent Ely
+  Copyright (c) 2015-2022 Brent Ely; its source header also names: "Some
+  code derived from the OfficeGen project: github.com/Ziv-Barber/officegen/
+  (Copyright 2013 Ziv Barber)"
 - jszip@3.10.1 (MIT, of its MIT/GPL-3.0 dual license; we take the MIT
   option) — https://github.com/Stuk/jszip — Copyright (c) 2009-2016
   Stuart Knightley, David Duponchel, Franz Buchinger, António Afonso
@@ -1272,15 +1385,17 @@ anthropics/omelette repo, under appifacts/.
 <meta name="README" content="Appifact type: Slides. This page is the shared runtime; an instance’s content (title, document, comments) lives in its live store (the db capability), written with the ArtifactData tool — this page carries none, and an empty store is an empty document. Instances are created from this type and inherit its capabilities {&quot;downloads&quot;:{},&quot;artifact&quot;:{},&quot;comments&quot;:{&quot;composer_only&quot;:true,&quot;customAnchors&quot;:true},&quot;room&quot;:{},&quot;db&quot;:{&quot;rules&quot;:[{&quot;path&quot;:&quot;&quot;,&quot;write&quot;:&quot;admin&quot;},{&quot;path&quot;:&quot;notes&quot;,&quot;read&quot;:&quot;admin&quot;,&quot;write&quot;:&quot;admin&quot;}]},&quot;assets&quot;:{},&quot;user&quot;:{&quot;scopes&quot;:[&quot;profile&quot;]},&quot;mcp&quot;:{&quot;servers&quot;:[{&quot;server&quot;:&quot;Google Drive&quot;,&quot;tools&quot;:[&quot;create_file&quot;,&quot;gdrive_upload&quot;]}]}}. The README comment at the top of head has details.">
 <meta name="appifact-capabilities" content="{&quot;downloads&quot;:{},&quot;artifact&quot;:{},&quot;comments&quot;:{&quot;composer_only&quot;:true,&quot;customAnchors&quot;:true},&quot;room&quot;:{},&quot;db&quot;:{&quot;rules&quot;:[{&quot;path&quot;:&quot;&quot;,&quot;write&quot;:&quot;admin&quot;},{&quot;path&quot;:&quot;notes&quot;,&quot;read&quot;:&quot;admin&quot;,&quot;write&quot;:&quot;admin&quot;}]},&quot;assets&quot;:{},&quot;user&quot;:{&quot;scopes&quot;:[&quot;profile&quot;]},&quot;mcp&quot;:{&quot;servers&quot;:[{&quot;server&quot;:&quot;Google Drive&quot;,&quot;tools&quot;:[&quot;create_file&quot;,&quot;gdrive_upload&quot;]}]}}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>(function(){try{var l=window.top!==window&&JSON.parse(window.name).lang;if(["de-DE","es-419","es-ES","fr-FR","hi-IN","id-ID","it-IT","ja-JP","ko-KR","pt-BR"].indexOf(l)<0)return;window.__appifact_i18n={lang:l,words:fetch("artifact-type/i18n/"+l+".js",{credentials:"same-origin"}).then(function(r){return r.ok?r.json():null}).catch(function(){return null})}}catch(e){}})()</script>
 <script id="appifact-mode">(function(){var h=document.documentElement;function s(){var t=h.getAttribute('data-theme');if(t==='light'||t==='dark'){h.setAttribute('data-mode',t)}else{h.removeAttribute('data-mode')}}s();if(typeof MutationObserver==='function'){new MutationObserver(s).observe(h,{attributes:true,attributeFilter:['data-theme']})}})();</script>
-<link rel="preload" as="font" type="font/woff2" href="https://fonts.frame.claudeusercontent.com/_runtime/AnthropicSans-Roman-Variable-26-179-2.542f0e8bf7a27f23.woff2" crossorigin>
-<style>@font-face{font-family:"Anthropic Sans";src:url(https://fonts.frame.claudeusercontent.com/_runtime/AnthropicSans-Roman-Variable-26-179-2.542f0e8bf7a27f23.woff2) format("woff2"),url(/_runtime/AnthropicSans-Roman-Variable-26-179-2.542f0e8bf7a27f23.woff2) format("woff2");font-weight:300 800;font-style:normal;font-display:swap;font-feature-settings:"dlig" 0}</style>
+<script>document.head.appendChild(Object.assign(document.createElement("link"),{rel:"preload",as:"script",href:"artifact-type/"+(document.documentElement.hasAttribute("data-frame-capture")?"capture.js":"app.js")}))</script>
+<link rel="preload" as="font" type="font/woff2" href="https://fonts.frame.claudeusercontent.com/_runtime/AnthropicSansMicro-Text-Variable-26-245-1.5161b683881e7914.woff2" crossorigin>
+<style>@font-face{font-family:"Anthropic Sans";src:url(https://fonts.frame.claudeusercontent.com/_runtime/AnthropicSansMicro-Text-Variable-26-245-1.5161b683881e7914.woff2) format("woff2"),url(/_runtime/AnthropicSansMicro-Text-Variable-26-245-1.5161b683881e7914.woff2) format("woff2");font-weight:300 800;font-style:normal;font-display:swap;font-feature-settings:"dlig" 0,"ss01" 1,"ss02" 1;unicode-range:U+0-5B,U+5D-A0,U+A2-A3,U+A5-316,U+318-DFFF,U+E140-10FFFF}</style>
 <script>try{document.fonts.load('1em "Anthropic Sans"').catch(function(){})}catch(e){}</script>
 <link rel="stylesheet" href="artifact-type/app.css">
 </head>
 <body>
 <script>try{if(window.claude.hot.from!=null)document.documentElement.setAttribute("data-took-over","")}catch(e){}</script>
 <div id="root"><div data-placeholder="deck" aria-hidden="true" style="position:fixed;inset:0;display:flex;flex-direction:column;pointer-events:none"><div data-rail="open" class="flex h-full min-h-0"><div class="flex min-w-0 flex-1 flex-col"><div class="relative flex min-h-0 flex-1 items-center justify-center bg-editor-canvas p-6 pt-[calc(1.5rem+var(--tb-overlay-h,0px))]"><div class="mc-shimmer aspect-video w-full max-w-3xl rounded-md"></div></div><div class="flex shrink-0 gap-6 border-t border-border-line bg-panel p-3 pl-9"><div class="mc-shimmer aspect-video shrink-0 rounded-sm" style="width:124px"></div><div class="mc-shimmer aspect-video shrink-0 rounded-sm" style="width:124px"></div><div class="mc-shimmer aspect-video shrink-0 rounded-sm" style="width:124px"></div></div></div></div><div data-rail="closed" class="flex h-full min-h-0"><div class="flex min-w-0 flex-1 flex-col"><div class="relative flex min-h-0 flex-1 items-center justify-center bg-editor-canvas p-6 pt-[calc(1.5rem+var(--tb-overlay-h,0px))]"><div class="mc-shimmer aspect-video w-full max-w-3xl rounded-md"></div></div><div class="h-[calc(3.375rem+var(--sl-safe-b,0px))] shrink-0 bg-editor-canvas pointer-coarse:h-[calc(1.875rem+40px+var(--sl-safe-b,0px))]"></div></div></div></div></div>
-<script src="artifact-type/app.js"></script>
+<script>document.write('<script src="'+"artifact-type/"+(document.documentElement.hasAttribute("data-frame-capture")?"capture.js":"app.js")+'"><\/script>')</script>
 </body>
 </html>

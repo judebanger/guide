@@ -17,5 +17,8 @@
     "index": "project/deck.json",
     "order": "order",
     "cover": "cover"
-  }
+  },
+  "captureOmits": [
+    "artifact-type/app.js"
+  ]
 }

@@ -1,0 +1,1 @@
+import{MC as e,Ud as t,Zd as n,ak as r,ef as i,rk as a,sk as o}from"./app-core.js";var s=`prose-copied-less`;function c(){if(r(`prose-copied-less`))return;let c=n(t);document.documentElement.dataset.lfileNotice=c,e(`host`,`notice`,{reason:t});try{a.info(o(c),{id:s,duration:i(t)})}catch{}}export{c as t};
