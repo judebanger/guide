@@ -1,12 +1,12 @@
 # Shaders
 
-One shader is one artboard. Its levers are ordinary tweaks. Words or buttons over it are ordinary markup after the `<canvas>`, absolutely placed, with `pointer-events: none`, and `auto` on buttons.
+One shader is one artboard. Words or buttons over it are ordinary markup after the `<canvas>`, absolutely placed, with `pointer-events: none`, and `auto` on buttons.
 
 You don't run your work, so keep to this page's sample, kit and building blocks.
 
 ## The artboard
 
-The whole file. Change the title, size, background, aria-label, `data-props`, `FRAG` and `uniforms()`, and add any markup. Keep the rest as is in every artboard. `function shaderStage` is the kit: it compiles `FRAG`, feeds it time, the pointer and `uniforms()`, handles reduced motion, boards off screen, slow machines and lost WebGL, and falls back to the root's background. When a shader fails, `renderVals()` throws the kit's message, so the artboard shows it and the editor passes it to you.
+The whole file. Change the title, size, background, aria-label, `data-props`, `FRAG` and `uniforms()`, and add any markup. Keep the rest as is in every artboard, except that a canvas on a PAGE, imported or not, takes `touch-action: pan-y` to scroll. `function shaderStage` is the kit: it runs `FRAG` with time, the pointer and `uniforms()`, and handles reduced motion, slow machines and lost WebGL. No WebGL shows the root's background. A failed shader's message shows on the artboard, and the editor passes it to you.
 
 ```html
 <!doctype html>
@@ -33,7 +33,7 @@ function shaderStage(logic, frag) {
 var calm = matchMedia('(prefers-reduced-motion: reduce)');
 var view, paint, buf, gl, uni, raf = 0, away = 0, shown = true, broken = false, fresh = true, before = '', tints = {};
 var time = 12, clock = 0, last = 0, down = false, inside = false, press = 0;
-var level = 0, ticks = 0, due = 0, next = 0, wait = 2, sharp = 1.5;
+var level = 0, ticks = 0, due = 0, next = 0, wait = 2, sharp = 1.5, rose = 0;
 var aim = [0.5, 0.5], mouse = [0.5, 0.5], trail = [], oops = 'This shader has an error. Ask Claude to fix it. ';
 function fail(text) { broken = true; halt(); sleep(); logic.error = text; logic.setState({}); }
 function part(kind, code) {
@@ -131,8 +131,9 @@ function count(now) { ticks = 0; due = now + 2e3; }
 function tune(now) {
   var f = frameElement;
   sharp = f && f.getBoundingClientRect().width < f.offsetWidth / 2 ? 1 : 1.5;
-  if (ticks < 50 && !calm.matches) { level += level < 5; next = now + wait * 1e3; }
-  else if (level && now > next) { level--; wait = Math.min(wait * 2, 64); next = now + wait * 1e3; }
+  if (ticks < 50 && !calm.matches) { level += level < 5; if (rose) wait = Math.min(wait * 2, 64); rose = 0; next = now + wait * 1e3; }
+  else if (level) { if (now > next) { level--; rose = now; next = now + wait * 1e3; } }
+  else if (rose && now - rose > 3e4) { rose = 0; wait = 2; }
   count(now);
 }
 function tick(now) {
@@ -221,7 +222,7 @@ In `project/canvas.json`, every shader's `boards` entry has `"is_interactive": t
 
 - `uniform float uTime;` seconds, from 12. Frozen under reduced motion.
 - `uniform vec2 uResolution;` pixels; it can change, so size things by it.
-- `uniform vec2 uMouse;` the pointer, 0 to 1 with y up, smoothed. With no pointer over the artboard it drifts slowly (unless motion is reduced), so a pointer effect still shows.
+- `uniform vec2 uMouse;` the pointer, 0 to 1 with y up, smoothed. With no pointer on it, it drifts slowly unless motion is reduced, so a pointer effect still shows.
 - `uniform float uPress;` 0 to 1, eased, while pressed.
 - `uniform vec3 uTrail[12];` points the pointer left behind, newest first: x, y as in `uMouse`, z the age in seconds at `speed`'s rate, below 0 when empty. Presses add a point.
 
@@ -240,7 +241,7 @@ WebGL2, GLSL ES 3.00. The kit adds `#version`, precision and `out vec4 outColor;
 - A function is defined before it's used. No recursion.
 - Never use as names: `input output filter sample half fixed common active partition smooth flat texture patch resource class long short double union cast`.
 - Nothing that gives NaN: `pow(max(x, 0.0), y)`, `sqrt(max(x, 0.0))`, `normalize(v + 1e-5)`, divide by `max(d, 1e-4)`, `smoothstep` with its first edge below its second.
-- Every pixel runs every frame: at most about 30 noise calls and 64 march steps a pixel. Never call `fbm` inside a loop over `uTrail`.
+- At most about 30 noise calls and 64 march steps a pixel. Never call `fbm` inside a loop over `uTrail`.
 
 ## Making it good
 
@@ -250,7 +251,7 @@ WebGL2, GLSL ES 3.00. The kit adds `#version`, precision and `out vec4 outColor;
 - Slow: big shapes at 0.05 to 0.3 times `uTime`, small detail a little faster.
 - Depth: 2 to 4 layers at different scales; soft falloffs (`exp(-d * k)`); highlights from a normal by finite differences.
 - Light adds up: sum it, then `col = 1.0 - exp(-col * 1.3);` so it glows instead of clipping.
-- Grain of about 0.02 hides banding.
+- Grain of 0.02 hides banding.
 - The pointer should read in the first second: something near it bends, glows or parts.
 
 ```glsl
@@ -283,9 +284,9 @@ float caustic(vec2 p, float t) {
 - Water light: `caustic(p * 2.0, uTime * 0.9)` at two scales, added over a clear blue or green floor. Keep the water bright.
 - Ripples: for each `uTrail` point with z >= 0 at distance `d`, with `r = d - z * 0.34`, a ring `sin(r * 58.0) * exp(-r * r * 81.0) * exp(-z * 1.1)`. Sum into a height, take its gradient, and shift what you draw by it.
 - Goo: `f`, the sum of `r * r / max(dot(p - c, p - c), 1e-4)` over moving centers `c`. `smoothstep(0.95, 1.05, f)` is the edge; `f`'s gradient gives a normal.
-- Sunlight through leaves: looking up, leaves filling most of the frame. Cells of small rotated leaf shapes (check the 3x3 neighbors), 4 layers: far ones pale, near ones dark, each lit from behind (mixed toward yellow-green by `exp(-d * 3.0)` from the sun at `uMouse`), sky in the gaps, a soft flare on top.
+- Sunlight through leaves: leaves filling most of the frame. Cells of small rotated leaf shapes (check the 3x3 neighbors), 4 layers: far ones pale, near ones dark, each lit from behind (mixed toward yellow-green by `exp(-d * 3.0)` from the sun at `uMouse`), sky in the gaps.
 - Soft shadows: a shape mask blurred by a wide `smoothstep`, drifting over a lit surface.
-- Aurora: 3 curtains: a base height from `fbm`, `smoothstep(-0.06, 0.12, y) * exp(-y / h)`, `y` the height above it, vertical rays from `fbm`, added up.
+- Aurora: 3 curtains: a base height from `fbm`, `smoothstep(-0.06, 0.12, y) * exp(-y / h)`, `y` the height above it, vertical rays from `fbm`.
 
 ## Rules
 
@@ -297,6 +298,6 @@ float caustic(vec2 p, float t) {
 
 One pass, no memory between frames, no pictures: no true fluid or particle simulation, no photo, video, camera, microphone or network input. Asked for one, make the effect itself over an abstract ground in the brief's colors, never a painted stand-in, and say in your reply what it can't do.
 
-A desktop browser runs about 16 shaders at once; the rest hold still.
+A desktop browser runs about 16 at once; the rest hold still.
 
 In your reply, say to press Play to use the pointer, and that Tweaks holds the levers.

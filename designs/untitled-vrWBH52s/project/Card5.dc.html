@@ -17,15 +17,15 @@ body{margin:0}
 <div style="width: 1080px; height: 1350px; box-sizing: border-box; padding: 110px 96px 90px 96px; display: flex; flex-direction: column; background: #F8F2E4; font-family: 'Lora', Georgia, serif; color: #2F3749">
 <div style="display: flex; align-items: center; justify-content: space-between; gap: 24px">
 <h2 style="margin: 0; font-weight: 400; font-size: 88px; line-height: 1.05">Первый поток</h2>
-<span style="background: #C9587A; color: #FFFFFF; font-size: 24px; padding: 10px 22px; border-radius: 999px; white-space: nowrap">осталось 5 мест</span>
+<span style="background: #C9587A; color: #FFFFFF; font-size: 24px; padding: 10px 22px; border-radius: 999px; white-space: nowrap">{{seats}}</span>
 </div>
 <div style="margin-top: 48px; display: flex; align-items: flex-end; gap: 44px">
 <div style="display: flex; flex-direction: column; gap: 8px">
-<p style="margin: 0; font-size: 140px; line-height: 0.95; font-weight: 500">4 200 ₽</p>
-<p style="margin: 0; font-size: 26px; color: #5E6577">для 1 потока · 600 ₽ в неделю</p>
+<p style="margin: 0; font-size: 140px; line-height: 0.95; font-weight: 500">{{price}}</p>
+<p style="margin: 0; font-size: 26px; color: #5E6577">{{priceNote}}</p>
 </div>
 <div style="display: flex; flex-direction: column; gap: 8px; padding-bottom: 2px">
-<p style="margin: 0; font-size: 60px; line-height: 1; color: #6E7486">9 000 ₽</p>
+<p style="margin: 0; font-size: 60px; line-height: 1; color: #6E7486">{{nextPrice}}</p>
 <p style="margin: 0; font-size: 24px; color: #5E6577">со 2-го потока</p>
 </div>
 </div>
@@ -34,7 +34,7 @@ body{margin:0}
 <span style="font-size: 28px; line-height: 1.4">если после первой недели поймёте, что программа не для вас – верну деньги</span>
 </div>
 <div style="margin-top: 32px; display: flex; flex-direction: column; gap: 12px; font-size: 30px; line-height: 1.35">
-<div style="display: flex; gap: 20px"><span style="color: #C9587A">•</span><span>старт – 6 ноября</span></div>
+<div style="display: flex; gap: 20px"><span style="color: #C9587A">•</span><span>старт – {{startDate}}</span></div>
 <div style="display: flex; gap: 20px"><span style="color: #C9587A">•</span><span>онлайн, из любого города</span></div>
 <div style="display: flex; gap: 20px"><span style="color: #C9587A">•</span><span>все встречи записываются</span></div>
 </div>
@@ -43,13 +43,22 @@ body{margin:0}
 </div>
 <div style="margin-top: auto; border-top: 1px solid #DDD4C2; padding-top: 36px">
 <p style="margin: 0; font-size: 30px; line-height: 1.4">Чтобы записаться, напишите мне в личные сообщения кодовое слово</p>
-<p style="margin: 8px 0 0 0; font-family: 'Caveat', cursive; font-size: 96px; line-height: 1; color: #C9587A">Дружба</p>
+<p style="margin: 8px 0 0 0; font-family: 'Caveat', cursive; font-size: 96px; line-height: 1; color: #C9587A">{{codeWord}}</p>
 </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1080,"height":1350}}'>
+<script type="text/x-dc" data-dc-script data-props='{"seats":{"editor":"text","default":"осталось 5 мест","section":"Запись"},"startDate":{"editor":"text","default":"6 ноября","section":"Запись"},"price":{"editor":"text","default":"4 200 ₽","section":"Цена"},"priceNote":{"editor":"text","default":"для 1 потока · 600 ₽ в неделю","section":"Цена"},"nextPrice":{"editor":"text","default":"9 000 ₽","section":"Цена"},"codeWord":{"editor":"text","default":"Дружба","section":"Запись"},"$preview":{"width":1080,"height":1350}}'>
 class Component extends DCLogic {
-renderVals() { return {}; }
+renderVals() {
+return {
+seats: this.props.seats ?? 'осталось 5 мест',
+startDate: this.props.startDate ?? '6 ноября',
+price: this.props.price ?? '4 200 ₽',
+priceNote: this.props.priceNote ?? 'для 1 потока · 600 ₽ в неделю',
+nextPrice: this.props.nextPrice ?? '9 000 ₽',
+codeWord: this.props.codeWord ?? 'Дружба'
+};
+}
 }
 </script>
 </body>

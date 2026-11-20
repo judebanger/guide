@@ -6,9 +6,9 @@ This Anthropic artifact type was built with the third-party packages below, as r
 
 ---
 
-@base-ui/react 1.8.0
+@base-ui/react 1.9.0
 Declared license: MIT
-Links: https://www.npmjs.com/package/@base-ui/react/v/1.8.0 and https://github.com/mui/base-ui
+Links: https://www.npmjs.com/package/@base-ui/react/v/1.9.0 and https://github.com/mui/base-ui
 
 MIT License
 
@@ -34,9 +34,9 @@ SOFTWARE.
 
 ---
 
-@base-ui/utils 0.4.0
+@base-ui/utils 0.5.0
 Declared license: MIT
-Links: https://www.npmjs.com/package/@base-ui/utils/v/0.4.0 and https://github.com/mui/base-ui
+Links: https://www.npmjs.com/package/@base-ui/utils/v/0.5.0 and https://github.com/mui/base-ui
 
 MIT License
 
@@ -690,9 +690,9 @@ SOFTWARE.
 
 ---
 
-use-sync-external-store 1.6.0
+use-sync-external-store 1.7.0
 Declared license: MIT
-Links: https://www.npmjs.com/package/use-sync-external-store/v/1.6.0 and https://github.com/facebook/react
+Links: https://www.npmjs.com/package/use-sync-external-store/v/1.7.0 and https://github.com/react/react
 
 MIT License
 
