@@ -81,7 +81,7 @@ after a reload.
 
 ## First: where a design system keeps itself
 
-`read` its `project/README.md` (`path`), never its page: everything
+`read` its `project/README.md` (with `project/tokens.json` in `paths` where your tool allows), never its page: everything
 it names is under `project/` (`project/api/…`, `project/tokens.json`); icons, logos and images it keeps by id are read by id
 (`read` the id as `path`). Not served: say so, never guess; a new system may have tokens and no README yet: its `project/tokens.json` alone is then what you read and install.
 
