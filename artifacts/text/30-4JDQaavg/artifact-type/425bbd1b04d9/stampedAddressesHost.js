@@ -1,0 +1,1 @@
+import{$V as e}from"./app-core.js";import{F as t,j as n}from"./app-lazy.js";function r(r,i,a){let o=n(i,t=>e(t,a));o!==null&&t.getState().set(r,o.nodeId,o.census)}function i(e){t.getState().clearFile(e)}export{i as forgetStampedAddresses,r as takeStampedAddresses};

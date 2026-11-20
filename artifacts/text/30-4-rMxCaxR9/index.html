@@ -124,7 +124,8 @@
       "edit",
       "sync",
       "render",
-      "connect"
+      "connect",
+      "import"
     ],
     readyTimeoutS: 60
   };
@@ -163,12 +164,13 @@
     var dead = false;
     var live = true;
     var clear = function() {
+      var was = text;
       text = "";
       first = 0;
       dead = false;
       n = 0;
       if (cleared)
-        cleared();
+        cleared(was);
     };
     var onKey = function(e) {
       if (claim && now() - born > LIFE)
@@ -425,7 +427,7 @@
       return "data";
     if (EXT_RE.test(scheme))
       return "ext";
-    if (scheme.startsWith("about:") || own.doc !== undefined && f.split("#", 1)[0] === own.doc)
+    if (scheme.startsWith("about:") || own.doc !== undefined && f.split(/[?#]/, 1)[0] === own.doc.split(/[?#]/, 1)[0])
       return "inl";
     return own.origins.some((o) => o !== "" && o !== "null" && f.startsWith(`${o}/`)) ? "bun" : "frn";
   }
@@ -1212,13 +1214,15 @@
       return "first_result_timeout";
     if (!has("snapshot"))
       return "render";
+    if (at("editorFrameCreated") < at("fence"))
+      return "render";
     const gone = at("editorFrameDiscard:");
     const live = (mark) => at(mark) > gone;
     if (live("runtimePost"))
       return "helper_init_timeout";
     if (live("editorFrameLoaded"))
       return has("runtimeWarm") ? "helper_error" : has("runtimeSilent") ? "helper_timeout" : "network";
-    return has("editorFrameCreated") && at("editorFrameCreated") >= gone ? "helper_start_timeout" : "render";
+    return at("editorFrameCreated") >= gone ? "helper_start_timeout" : "render";
   }
   var RESUME_FLOOR_MS = 1000;
   function armOpenStop(d) {
@@ -1355,7 +1359,298 @@
     } catch {}
   }
 
+  // ../../../src/lib/platform/addressToken.ts
+  var TOKEN_KEY = "__frame_t";
+  var KEPT_KEYS = new Set(["__frame_v"]);
+  var RELOADED_KEY = "__docs_reloaded";
+  var REOPEN = "__pagesReopenOnToken";
+  var RELOADED = "__pagesReloadedItself";
+  var keyOf = (pair) => {
+    try {
+      return decodeURIComponent(pair.split("=", 1)[0]);
+    } catch {
+      return null;
+    }
+  };
+  var pairsOf = (search) => search.replace(/^\?/, "").split("&");
+  function holdsAddressToken(search) {
+    return typeof search === "string" && pairsOf(search).some((pair) => keyOf(pair) === TOKEN_KEY);
+  }
+  function addressTokenIn(search) {
+    const pair = pairsOf(search).find((p) => keyOf(p) === TOKEN_KEY);
+    const value = pair?.includes("=") ? new URLSearchParams(`v=${pair.slice(pair.indexOf("=") + 1)}`).get("v") : null;
+    return value === null || value === "" ? null : value;
+  }
+  var watched = new WeakSet;
+  function dropAddressToken(w) {
+    try {
+      if (!watched.has(w)) {
+        watched.add(w);
+        w.addEventListener("popstate", () => dropAddressTokenOrStop(w));
+      }
+      const { pathname, search, hash } = w.location;
+      if (holdsAddressToken(search)) {
+        const pairs = pairsOf(search);
+        if (pairs.some((pair) => keyOf(pair) === RELOADED_KEY))
+          w[RELOADED] = true;
+        const opened = pairs.filter((pair) => keyOf(pair) !== RELOADED_KEY).join("&");
+        w[REOPEN] ??= () => w.location.replace(`${pathname}?${opened}&${RELOADED_KEY}=1${w.location.hash}`);
+        const kept = pairs.filter((pair) => KEPT_KEYS.has(keyOf(pair))).join("&");
+        w.history.replaceState(w.history.state, "", pathname + (kept === "" ? "" : `?${kept}`) + hash);
+      }
+      return !holdsAddressToken(w.location.search) && !holdsAddressToken(new URL(w.document.baseURI).search);
+    } catch {
+      return false;
+    }
+  }
+  function dropAddressTokenOrStop(w) {
+    if (!dropAddressToken(w))
+      throw new Error("Docs could not confirm that this page's address holds no asset token");
+  }
+
+  // src/tokenRescue.ts
+  var TOKEN_RESCUE_WHERE = "some";
+  var TOKEN_RESCUE_ORGS = new Set(["01582c35-9930-414e-93b9-0dd852675b4d", "6a683412-c4fc-445b-a46e-fa66b26af171"]);
+  var TOKEN_RESCUE_SHARE = 10;
+  var STAGING_HOST_RE = /(?:\.frame\.staging\.claudeusercontent\.com|\.test)$/;
+  var TOKEN_RE = /^[\w-]{24}\.([\da-f-]{36})\.([\da-f-]{36})\.\d+((?:\.[\w:-]+){0,2})$/;
+  var PLAIN_END_RE = /^(?:\.(?:ext|oracle|connect|compartment|[\da-f-]{36}|did:plc:[a-z2-7]{24}))?$/;
+  var WATCH_ATTR2 = "data-frame-refused-watch";
+  var STAND_ASIDE_ATTR = "data-token-reads";
+  var UNSUPPORTED_ATTR2 = "data-frame-unsupported";
+  var TOKEN_RESCUE_GLOBAL = "__pagesTokenRescue";
+  var HEAD_WAITS_MS = [0, 1000, 3000];
+  var HEAD_MAX_MS = 8000;
+  var START_MAX_MS = 40000;
+  var MAX_HELD = 64;
+  function thousandthOf(text) {
+    let h = 2166136261;
+    for (let i = 0;i < text.length; i++)
+      h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+    return (h >>> 0) % 1000;
+  }
+  function rescueAdmits(token, share) {
+    const [, org, account, end] = TOKEN_RE.exec(token) ?? [];
+    return org !== undefined && account !== undefined && (TOKEN_RESCUE_ORGS.has(org) || PLAIN_END_RE.test(end ?? "?") && thousandthOf(account) < share);
+  }
+  function armTokenRescue(d) {
+    try {
+      const at = d.w.location;
+      const html = d.w.document.documentElement;
+      const ver = /^\/_f\/([^/]{1,128})\//.exec(at.pathname)?.[1];
+      const token = addressTokenIn(at.search);
+      const { loader } = d;
+      if (ver === undefined || token === null || loader === undefined || !html.hasAttribute(WATCH_ATTR2))
+        return;
+      const here = d.where === "everywhere" || d.where === "some" && (STAGING_HOST_RE.test(at.hostname) || rescueAdmits(token, d.share));
+      if (!here)
+        return;
+      const path = `/_f/${ver}/`;
+      const root = at.origin + path;
+      const ask = d.w.fetch.bind(d.w);
+      const own = (raw) => {
+        try {
+          const u = new URL(raw, root);
+          return u.origin === at.origin && u.username === "" && u.password === "" && u.pathname.startsWith(path) && !/%2f|%5c/i.test(u.pathname) ? u : null;
+        } catch {
+          return null;
+        }
+      };
+      const read = (raw, init) => {
+        const u = own(raw);
+        if (covered() || state !== "on" || u === null || !/^(?:GET|HEAD)$/i.test(init?.method ?? "GET"))
+          return null;
+        u.searchParams.delete(TOKEN_KEY);
+        u.hash = "";
+        const plain = u.href;
+        u.searchParams.set(TOKEN_KEY, token);
+        return ask(u.href, { ...init, redirect: "error", credentials: "same-origin" }).then((r) => Object.defineProperty(new Response(r.body, { status: r.status, statusText: r.statusText, headers: r.headers }), "url", { value: plain }));
+      };
+      let state = "idle";
+      let settled = false;
+      let held = [];
+      let given = 0;
+      let taker = null;
+      let passing = null;
+      let entering = false;
+      const letGo = () => {
+        state = "off";
+        const els = held;
+        held = [];
+        for (const el of els) {
+          try {
+            d.again(el);
+          } catch {}
+        }
+      };
+      const fail = (why) => {
+        if (settled)
+          return;
+        settled = true;
+        try {
+          html.setAttribute(UNSUPPORTED_ATTR2, "");
+          letGo();
+          d.notice();
+        } finally {
+          d.say("failure", why);
+        }
+      };
+      const covered = () => {
+        if (settled || !html.hasAttribute(UNSUPPORTED_ATTR2))
+          return false;
+        settled = true;
+        letGo();
+        d.say("aborted");
+        return true;
+      };
+      const start = async () => {
+        state = "on";
+        if (covered())
+          return;
+        d.schedule(() => void (entering || d.started() || fail("network")), START_MAX_MS);
+        d.onReady(() => {
+          if (settled)
+            return;
+          settled = true;
+          held = [];
+          d.say("success");
+        });
+        if (!dropAddressToken(d.w))
+          return fail("dom_security_error");
+        let bytes;
+        try {
+          const r = await read(loader.file);
+          if (r?.ok !== true)
+            return fail("network");
+          bytes = await r.arrayBuffer();
+        } catch {
+          return fail("network");
+        }
+        if (await d.sha256(bytes) !== loader.sha256)
+          return fail("validation");
+        if (covered() || state !== "on")
+          return;
+        const api = {
+          base: new URL(".", new URL(loader.file, root)).href,
+          read,
+          fail,
+          pass: (el) => {
+            passing = el;
+            try {
+              d.again(el);
+            } finally {
+              passing = null;
+            }
+          },
+          failed: () => covered() || state !== "on",
+          entering: () => void (entering = true),
+          sha256: d.sha256,
+          take: (fn) => {
+            taker = fn;
+            while (given < held.length)
+              fn(held[given++]);
+          }
+        };
+        d.w[TOKEN_RESCUE_GLOBAL] = api;
+        await d.run(bytes);
+        if (taker === null)
+          fail("internal");
+      };
+      const judge = (url, n) => {
+        let over = false;
+        const end = (status) => {
+          if (over || state !== "asking")
+            return;
+          over = true;
+          late();
+          if (d.started())
+            return letGo();
+          if (status === 403)
+            return void start().catch(() => fail("internal"));
+          if ((status === null || status >= 500) && n + 1 < HEAD_WAITS_MS.length)
+            return void d.schedule(() => judge(url, n + 1), HEAD_WAITS_MS[n + 1]);
+          letGo();
+        };
+        const late = d.schedule(() => end(null), HEAD_MAX_MS);
+        ask(url, { method: "HEAD", cache: "no-store", credentials: "same-origin" }).then((r) => end(r.status), () => end(null));
+      };
+      html.setAttribute(STAND_ASIDE_ATTR, "");
+      d.on("error", (ev) => {
+        try {
+          if (state === "off" || ev.target === passing)
+            return;
+          const el = ev.target;
+          const script = el?.tagName === "SCRIPT";
+          const url = script ? el?.src : el?.tagName === "LINK" ? el.href : undefined;
+          if (el === null || typeof url !== "string" || own(url) === null)
+            return;
+          ev.stopImmediatePropagation();
+          if (!settled && held.length < MAX_HELD)
+            held.push(el);
+          if (taker !== null) {
+            given = held.length;
+            return taker(el);
+          }
+          const boot = script ? el.type === "module" && el.async !== true : typeof el.rel === "string" && /(^|\s)stylesheet(\s|$)/i.test(el.rel);
+          if (state !== "idle" || !boot)
+            return;
+          if (d.started())
+            return letGo();
+          state = "asking";
+          judge(url, 0);
+        } catch {}
+      });
+      d.on("load", () => void (state === "idle" && letGo()));
+      d.on("pagehide", () => {
+        if (state !== "on")
+          return letGo();
+        if (settled)
+          return;
+        settled = true;
+        d.say("aborted");
+      });
+    } catch {}
+  }
+
   // src/health.ts
+  armTokenRescue({
+    w: window,
+    where: TOKEN_RESCUE_WHERE,
+    share: TOKEN_RESCUE_SHARE,
+    loader: typeof { file: "artifact-type/555e331ed61d/token-rescue.js", sha256: "e555a7c55ccd3f888e9e8d5a6d3d065a4f0a07bac20c4bff43e427e7ce4dfe8d" } === "undefined" ? undefined : { file: "artifact-type/555e331ed61d/token-rescue.js", sha256: "e555a7c55ccd3f888e9e8d5a6d3d065a4f0a07bac20c4bff43e427e7ce4dfe8d" },
+    on: (type, fn) => window.addEventListener(type, fn, true),
+    started: () => performance.getEntriesByName("pages:entry").length > 0 || (document.getElementById("root")?.childElementCount ?? 0) > 0,
+    schedule: (fn, ms) => {
+      const t = setTimeout(fn, ms);
+      return () => clearTimeout(t);
+    },
+    sha256: async (bytes) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (b) => b.toString(16).padStart(2, "0")).join(""),
+    run: async (source) => void await import(URL.createObjectURL(new Blob([source], { type: "text/javascript" }))),
+    again: (el) => void el.dispatchEvent(new Event("error")),
+    notice: () => {
+      const box = document.createElement("div");
+      box.setAttribute("role", "alert");
+      box.setAttribute("data-docs-rescue-notice", "");
+      box.style.cssText = "position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;background:Canvas;color:CanvasText;font:15px/1.45 system-ui,-apple-system,sans-serif";
+      box.style.colorScheme = document.documentElement.style.colorScheme || "light dark";
+      const title = document.createElement("h1");
+      title.style.cssText = "margin:0 0 8px;font:400 28px/1.2 ui-serif,Georgia,serif";
+      title.textContent = "Couldn’t open this Doc";
+      const body = document.createElement("p");
+      body.style.cssText = "margin:0;max-width:24em;opacity:.7";
+      body.textContent = "Close this Doc and open it again. If it keeps happening, update this browser or app, or open the Doc in another browser.";
+      box.append(title, body);
+      document.documentElement.append(box);
+    },
+    onReady: (fn) => {
+      const ready = health.ready.bind(health);
+      health.ready = () => {
+        fn();
+        ready();
+      };
+    },
+    say: (outcome, why) => health.report("import", outcome, why)
+  });
   var foreignCrashes = sortForeignCrashes(window);
   var health = init({ key, monitoring });
   foreignCrashes.attach(health);
@@ -1422,6 +1717,7 @@
 })();</script>
     <link rel="preload" as="fetch" type="font/woff2" href="./artifact-type/fonts/AnthropicSansMicro-Text-Web.b4415bf251f15ee7.woff2" crossorigin>
     <meta http-equiv="Content-Security-Policy" content="frame-src 'self'" />
+    <script>(function(){try{if(window.parent===window)return;var l=JSON.parse(window.name).lang,f={"de-DE":"de-DE.b6065add.js","es-419":"es-419.29328ea8.js","es-ES":"es-ES.6fb4d13c.js","fr-FR":"fr-FR.1ce5b7d6.js","hi-IN":"hi-IN.5ec4f0f6.js","id-ID":"id-ID.01a5880e.js","it-IT":"it-IT.4ff7d393.js","ja-JP":"ja-JP.17d0aa1a.js","ko-KR":"ko-KR.ecec858c.js","pt-BR":"pt-BR.f89085bf.js"};if(typeof l!=="string"||!Object.prototype.hasOwnProperty.call(f,l))return;var c=new AbortController(),u="./artifact-type/i18n/"+f[l],a=fetch(u,{keepalive:true,signal:c.signal});a.catch(function(){});window.__pagesWords={url:u,answer:a,stop:function(){c.abort()}}}catch(e){}})()</script>
     <style>
       /* This page never scrolls; a Doc scrolls inside the editor's iframe. If the page's overflow changes after load, an invisible scrollbar can
          come back and take swipes at the right edge in the Claude iOS app, so keep height and overflow equal to MIRROR_CSS's html rule in
@@ -1434,19 +1730,20 @@
     </style>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Claude Docs</title>
-    <meta name="appifact-capabilities" content="{&quot;user&quot;:{&quot;scopes&quot;:[&quot;profile&quot;]},&quot;assets&quot;:{},&quot;sample&quot;:{},&quot;room&quot;:{},&quot;downloads&quot;:{},&quot;dictation&quot;:{},&quot;tts&quot;:{},&quot;comments&quot;:{&quot;customAnchors&quot;:true,&quot;headless&quot;:true},&quot;mcp&quot;:{&quot;servers&quot;:[{&quot;server&quot;:&quot;Google Drive&quot;,&quot;tools&quot;:[&quot;create_file&quot;,&quot;gdrive_upload&quot;]},{&quot;server&quot;:&quot;Claude Docs&quot;,&quot;tools&quot;:[&quot;export&quot;]},{&quot;server&quot;:&quot;Notion&quot;,&quot;tools&quot;:[&quot;notion-create-pages&quot;]}]},&quot;flags&quot;:{&quot;keys&quot;:[&quot;appifact_bottom_toolbar&quot;,&quot;appifact_icon_set&quot;,&quot;claudified_chipper_teacup&quot;,&quot;claudified_tidy_lantern&quot;,&quot;pages_bittern_reed&quot;,&quot;pages_godwit_strath&quot;,&quot;pages_kestrel_scar&quot;,&quot;pages_linnet_combe&quot;,&quot;pages_nightjar_tor&quot;,&quot;pages_phalarope_breccia&quot;,&quot;pages_redshank_machair&quot;,&quot;pages_sanderling_drumlin&quot;,&quot;pages_siskin_wold&quot;,&quot;pages_whimbrel_esker&quot;,&quot;pages_wren_tarn&quot;,&quot;tidal_glowing_ember&quot;]},&quot;artifact&quot;:{&quot;publish&quot;:false}}" />
-    <meta name="docs-release-commit" content="a990f3e00b2cbf3683168633f2d37f72a87f1f15" />
-    <meta name="docs-editor-runtime" content="./artifact-type/lfile-runtime.80c54552.js" />
-    <script type="module" async crossorigin fetchpriority="high" src="./artifact-type/a990f3e00b2c/hello-early.js"></script>
-    <script type="module" crossorigin src="./artifact-type/a990f3e00b2c/index.js"></script>
-    <link rel="modulepreload" crossorigin href="./artifact-type/a990f3e00b2c/rolldown-runtime.js">
-    <link rel="modulepreload" crossorigin href="./artifact-type/a990f3e00b2c/preload.js">
-    <link rel="modulepreload" crossorigin href="./artifact-type/a990f3e00b2c/hello-early.js">
-    <link rel="modulepreload" crossorigin href="./artifact-type/a990f3e00b2c/app-core.js">
-    <link rel="modulepreload" crossorigin href="./artifact-type/a990f3e00b2c/cds.js">
-    <link rel="modulepreload" crossorigin href="./artifact-type/a990f3e00b2c/react.js">
-    <link rel="modulepreload" crossorigin href="./artifact-type/a990f3e00b2c/ref-chips.js">
-    <link rel="stylesheet" crossorigin href="./artifact-type/index-v9yR6sNq.css">
+    <meta name="appifact-capabilities" content="{&quot;user&quot;:{&quot;scopes&quot;:[&quot;profile&quot;]},&quot;assets&quot;:{},&quot;sample&quot;:{},&quot;room&quot;:{},&quot;downloads&quot;:{},&quot;dictation&quot;:{},&quot;tts&quot;:{},&quot;comments&quot;:{&quot;customAnchors&quot;:true,&quot;headless&quot;:true},&quot;mcp&quot;:{&quot;servers&quot;:[{&quot;server&quot;:&quot;Google Drive&quot;,&quot;tools&quot;:[&quot;create_file&quot;,&quot;gdrive_upload&quot;]},{&quot;server&quot;:&quot;Claude Docs&quot;,&quot;tools&quot;:[&quot;export&quot;]},{&quot;server&quot;:&quot;Notion&quot;,&quot;tools&quot;:[&quot;notion-create-pages&quot;]}]},&quot;flags&quot;:{&quot;keys&quot;:[&quot;appifact_bottom_toolbar&quot;,&quot;appifact_dunnock_heugh&quot;,&quot;appifact_icon_set&quot;,&quot;claudified_chipper_teacup&quot;,&quot;claudified_tidy_lantern&quot;,&quot;pages_bittern_reed&quot;,&quot;pages_godwit_strath&quot;,&quot;pages_kestrel_scar&quot;,&quot;pages_nightjar_tor&quot;,&quot;pages_phalarope_breccia&quot;,&quot;pages_redshank_machair&quot;,&quot;pages_sanderling_drumlin&quot;,&quot;pages_siskin_wold&quot;,&quot;pages_whimbrel_esker&quot;,&quot;pages_wren_tarn&quot;,&quot;tidal_glowing_ember&quot;]},&quot;artifact&quot;:{&quot;publish&quot;:false}}" />
+    <meta name="docs-release-commit" content="555e331ed61d841ce1de380d0906f8dedfa6d962" />
+    <meta name="docs-editor-part-late-ui" content="./artifact-type/lfile-part.late-ui.ac22f3fe.js" />
+    <meta name="docs-editor-runtime" content="./artifact-type/lfile-runtime.7a19f52f.js" />
+    <script type="module" async crossorigin fetchpriority="high" src="./artifact-type/555e331ed61d/hello-early.js"></script>
+    <script type="module" crossorigin src="./artifact-type/555e331ed61d/index.js"></script>
+    <link rel="modulepreload" crossorigin href="./artifact-type/555e331ed61d/rolldown-runtime.js">
+    <link rel="modulepreload" crossorigin href="./artifact-type/555e331ed61d/preload.js">
+    <link rel="modulepreload" crossorigin href="./artifact-type/555e331ed61d/hello-early.js">
+    <link rel="modulepreload" crossorigin href="./artifact-type/555e331ed61d/app-core.js">
+    <link rel="modulepreload" crossorigin href="./artifact-type/555e331ed61d/cds.js">
+    <link rel="modulepreload" crossorigin href="./artifact-type/555e331ed61d/react.js">
+    <link rel="modulepreload" crossorigin href="./artifact-type/555e331ed61d/ref-chips.js">
+    <link rel="stylesheet" crossorigin href="./artifact-type/index-cRbg7pPp.css">
   </head>
   <body>
     <div id="root"></div>

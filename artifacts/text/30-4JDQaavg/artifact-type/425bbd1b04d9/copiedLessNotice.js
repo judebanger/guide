@@ -1,0 +1,1 @@
+import{GA as e,Nw as t,Pf as n,Sf as r,UA as i,YA as a,jf as o}from"./app-core.js";var s=`prose-copied-less`;function c(){if(e(`prose-copied-less`))return;let c=o(r);document.documentElement.dataset.lfileNotice=c,t(`host`,`notice`,{reason:r});try{i.info(a(c),{id:s,duration:n(r)})}catch{}}export{c as t};

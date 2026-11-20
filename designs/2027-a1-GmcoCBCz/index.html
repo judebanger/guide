@@ -32,14 +32,18 @@
     flags: {
       keys: [
         "appifact_bottom_toolbar",
-        "appifact_creation_sequence",
-        "appifact_extra_export_formats",
         "appifact_icon_set",
         "design_artboards_at_address",
+        "design_bright_quilt",
         "design_cross_canvas_paste_confirm",
         "design_fast_edit",
         "design_fast_edit_sample",
-        "design_theme_tab"
+        "design_fixed_fade_wait",
+        "design_index_read_first",
+        "design_no_early_reads",
+        "design_no_script_preload",
+        "design_theme_tab",
+        "tidal_glowing_ember"
       ]
     }
   };
@@ -60,8 +64,23 @@
     readyTimeoutS: 60
   };
 
+  // ../../design-editor/src/host/tree/index-pending.ts
+  var INDEX_PENDING_ATTR = "data-index-pending";
+  function whenIndexAnswered(cb, doc = document) {
+    const html = doc.documentElement;
+    if (!html.hasAttribute(INDEX_PENDING_ATTR))
+      return cb();
+    const mo = new MutationObserver(() => {
+      if (html.hasAttribute(INDEX_PENDING_ATTR))
+        return;
+      mo.disconnect();
+      cb();
+    });
+    mo.observe(html, { attributes: true, attributeFilter: [INDEX_PENDING_ATTR] });
+  }
+
   // ../../packages/appifact-flags/src/vocabulary.ts
-  var VERSION = "appifact-flags:v1";
+  var VERSION = "appifact-flags:v2";
   var FLAGS_GLOBAL = "__appifact_flags";
   var APP_KEY_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
   var APP_FLAG_KEY_RE = /^[a-z][a-z0-9_]{0,63}$/;
@@ -83,6 +102,8 @@
     }
   }
   var READY_TIMEOUT_MS = 1500;
+  var ASK_AGAIN_MS = 30 * 60000;
+  var ASKS_AGAIN_MAX = 7;
   var MAX_UNDECLARED_WARNINGS = 8;
   function manifestProblem(manifest) {
     if (!isRecord(manifest)) {
@@ -194,6 +215,13 @@
         } catch {
           return {};
         }
+      },
+      latest: get,
+      onLatest: () => () => {
+        return;
+      },
+      askAgain: () => {
+        return;
       }
     };
   }
@@ -202,6 +230,10 @@
     let values = null;
     let answered = false;
     let warnedLate = false;
+    let live = {};
+    const listeners = new Set;
+    const now = () => env.now?.() ?? Date.now();
+    let [askedAt, asksAgain] = [now(), 0];
     const waiters = [];
     const undeclared = undeclaredWarner(manifest, env.warn);
     const settleAll = (taken, byAnswer) => {
@@ -253,19 +285,32 @@
           return {};
         }
       },
+      latest(key, fallback) {
+        try {
+          if (undeclared(key))
+            return fallback;
+          const v = Object.prototype.hasOwnProperty.call(live, key) ? live[key] : undefined;
+          return typeof v === "boolean" ? v : fallback;
+        } catch {
+          return fallback;
+        }
+      },
+      onLatest(heard) {
+        listeners.add(heard);
+        return () => void listeners.delete(heard);
+      },
+      askAgain() {
+        try {
+          if (asksAgain >= ASKS_AGAIN_MAX || now() - askedAt < ASK_AGAIN_MS)
+            return;
+          [askedAt, asksAgain] = [now(), asksAgain + 1];
+          env.post({ __frame_flags_ask: true });
+        } catch {}
+      },
       receive(data) {
         try {
           if (!isAnswer(data))
             return false;
-          if (values !== null) {
-            if (!answered && !warnedLate) {
-              warnedLate = true;
-              try {
-                env.warn(`the viewer shell answered after READY_TIMEOUT_MS (${READY_TIMEOUT_MS} ms); this page load keeps its defaults`);
-              } catch {}
-            }
-            return true;
-          }
           const taken = {};
           for (const key of Object.keys(data.values)) {
             if (!isDeclarableKey(key) || !declared.has(key))
@@ -273,6 +318,24 @@
             const v = jsonValue(data.values[key]);
             if (v !== undefined)
               taken[key] = v;
+          }
+          const news = Object.entries(taken).filter(([key, v]) => typeof v === "boolean" && live[key] !== v);
+          if (news.length > 0) {
+            live = { ...live, ...Object.fromEntries(news) };
+            for (const heard of [...listeners]) {
+              try {
+                heard();
+              } catch {}
+            }
+          }
+          if (values !== null) {
+            if (!answered && !warnedLate) {
+              warnedLate = true;
+              try {
+                env.warn(`the viewer shell answered after READY_TIMEOUT_MS (${READY_TIMEOUT_MS} ms); this page load keeps its defaults, except where it reads latest()`);
+              } catch {}
+            }
+            return true;
           }
           settleAll(taken, true);
           return true;
@@ -327,7 +390,7 @@
   }
   function inFramedContext() {
     try {
-      return typeof window !== "undefined" && typeof location !== "undefined" && window.parent !== window && location.protocol === "https:";
+      return typeof window !== "undefined" && typeof location !== "undefined" && window.parent !== window && (location.protocol === "https:" || location.protocol === "cowork-artifact:");
     } catch {
       return false;
     }
@@ -392,7 +455,9 @@
     "connect",
     "insert",
     "delete",
-    "reorder"
+    "reorder",
+    "encode",
+    "check"
   ];
   var OUTCOMES = ["success", "failure", "aborted"];
   var ERROR_TYPE_RE = /^[a-z][a-z0-9_]{0,31}$/;
@@ -400,6 +465,7 @@
     "conflict",
     "read_only",
     "too_large",
+    "too_many_files",
     "invalid_content",
     "backpressure",
     "transient",
@@ -415,6 +481,9 @@
     "helper_timeout",
     "helper_error",
     "helper_start_timeout",
+    "helper_init_timeout",
+    "hidden_page_error",
+    "hidden_page_timeout",
     "dom_encoding_error",
     "dom_operation_error",
     "dom_not_supported_error",
@@ -423,6 +492,25 @@
     "dom_security_error",
     "unknown"
   ];
+  var CHUNK_LOAD_KINDS = [
+    "script_own",
+    "script_other",
+    "style_own",
+    "style_other",
+    "preload_own",
+    "preload_other",
+    "font_own",
+    "import"
+  ];
+  var CRASH_TYPES = [
+    "uncaught_error",
+    "unhandled_rejection",
+    ...CHUNK_LOAD_KINDS.map((kind) => `chunk_load_${kind}`),
+    "unsupported_browser",
+    "opaque",
+    "extension"
+  ];
+  var TIMEOUT_STAGES = ["late", "script", "style", "document", "parsing", "parsed", "loaded"];
   var KNOWN_ERROR_TYPES = new Set([
     "boot_4xx",
     "boot_5xx",
@@ -432,11 +520,16 @@
     "csp_violation",
     "cap_load_error",
     "timeout",
+    ...TIMEOUT_STAGES.map((stage) => `timeout_${stage}`),
     "threw_before_ready",
     "uncaught_error",
     "unhandled_rejection",
     "chunk_load",
+    ...CHUNK_LOAD_KINDS.map((kind) => `chunk_load_${kind}`),
+    "chunk_load_recovered",
     "unsupported_browser",
+    "opaque",
+    "extension",
     ...ERROR_TYPES,
     "malformed"
   ]);
@@ -455,11 +548,25 @@
   var HEALTH_GLOBAL = "__appifact_health";
 
   // ../../packages/appifact-health/src/health.ts
+  function timeoutStageOf(page) {
+    if (page.readyState === "complete")
+      return "loaded";
+    if (page.scriptsAwaited > 0)
+      return "script";
+    if (page.stylesAwaited > 0)
+      return "style";
+    if (page.readyState === "loading")
+      return page.scripts === 0 ? "document" : "parsing";
+    return "parsed";
+  }
+  var RECOVERED = "chunk_load_recovered";
+  var crashFamily = (type) => type.startsWith("chunk_load_") ? "chunk_load" : type;
   var UNSUPPORTED_FALLBACK_MS = 8000;
   function awaitsUnsupportedVerdict(page, fileHref) {
+    return page.watched && isOwnReleaseFile(page, fileHref);
+  }
+  function isOwnReleaseFile(page, fileHref) {
     try {
-      if (!page.watched)
-        return false;
       const ver = /^\/_f\/([^/]{1,128})\//.exec(page.pathname)?.[1];
       if (ver === undefined)
         return false;
@@ -469,9 +576,19 @@
       return false;
     }
   }
+  function isHttpOnOtherOrigin(pageOrigin, fileHref) {
+    try {
+      const url = new URL(fileHref);
+      return /^https?:$/.test(url.protocol) && url.origin !== pageOrigin;
+    } catch {
+      return false;
+    }
+  }
   function failedLinkIsCrash(link, origin) {
-    if (/(^|\s)(stylesheet|modulepreload)(\s|$)/i.test(link.rel))
+    if (/(^|\s)modulepreload(\s|$)/i.test(link.rel))
       return true;
+    if (/(^|\s)stylesheet(\s|$)/i.test(link.rel))
+      return !isHttpOnOtherOrigin(origin, link.href);
     if (!/(^|\s)preload(\s|$)/i.test(link.rel) || link.as !== "font")
       return false;
     try {
@@ -480,16 +597,31 @@
       return false;
     }
   }
+  function failedFileKind(file, origin) {
+    if (!file.script && !failedLinkIsCrash(file, origin))
+      return null;
+    let own = false;
+    try {
+      own = new URL(file.href).origin === origin;
+    } catch {}
+    if (file.script)
+      return own ? "script_own" : "script_other";
+    if (/(^|\s)stylesheet(\s|$)/i.test(file.rel))
+      return own ? "style_own" : "style_other";
+    if (/(^|\s)modulepreload(\s|$)/i.test(file.rel))
+      return own ? "preload_own" : "preload_other";
+    return "font_own";
+  }
   function createVerdictGate(crash, env, fallbackMs = UNSUPPORTED_FALLBACK_MS) {
     let decided = null;
-    let pending = false;
+    let pending = null;
     let timer = null;
     let stopWatching = () => {};
     const decide = (type) => {
       if (decided === type || decided === "unsupported_browser")
         return;
       decided = type;
-      pending = false;
+      pending = null;
       try {
         if (timer !== null)
           env.clearTimeout(timer);
@@ -500,29 +632,29 @@
       crash(type);
     };
     const settle = () => {
-      if (pending)
-        decide(env.marked() ? "unsupported_browser" : "chunk_load");
+      if (pending !== null)
+        decide(env.marked() ? "unsupported_browser" : `chunk_load_${pending}`);
     };
     try {
       env.onHide(settle);
     } catch {}
     return {
-      fail(awaitsVerdict) {
+      fail(awaitsVerdict, kind) {
         if (!awaitsVerdict) {
-          crash("chunk_load");
+          crash(`chunk_load_${kind}`);
           return;
         }
         if (decided !== null) {
           crash(decided);
           return;
         }
-        if (pending)
+        if (pending !== null)
           return;
         if (env.marked()) {
           decide("unsupported_browser");
           return;
         }
-        pending = true;
+        pending = kind;
         try {
           stopWatching = env.onMark(() => {
             if (env.marked())
@@ -530,11 +662,13 @@
           });
         } catch {}
         timer = env.setTimeout(settle, fallbackMs);
-      }
+      },
+      waitNoLonger: settle
     };
   }
   var MAX_WARNINGS = 10;
   var READY_RESUME_FLOOR_MS = 1000;
+  var READY_LATE_MS = 5000;
   var APPIFACT_ERROR_TYPES = new Map([
     ["conflict", "conflict"],
     ["read-only", "read_only"],
@@ -563,7 +697,93 @@
     if (typeof reason !== "object" || reason === null)
       return false;
     const r = reason;
-    return r.name === "ChunkLoadError" || typeof r.message === "string" && CHUNK_LOAD_MESSAGE.test(r.message);
+    try {
+      return r.name === "ChunkLoadError" || typeof r.message === "string" && CHUNK_LOAD_MESSAGE.test(r.message);
+    } catch {
+      return false;
+    }
+  }
+  var EXTENSION_URL = /^(?:chrome-extension|moz-extension|safari-extension|safari-web-extension|webkit-masked-url):/;
+  var CHROME_FRAME = /^\s*at (?:async )?/;
+  var CHROME_FRAME_WITH_NO_SCRIPT = /(?:\((?:<anonymous>|native|index \d+)\)|^\s*at (?:async )?<anonymous>)\r?$/;
+  function chromeFrameInExtension(line) {
+    const open = line.lastIndexOf(" (");
+    return EXTENSION_URL.test(open < 0 ? line.replace(CHROME_FRAME, "") : line.slice(open + 2));
+  }
+  function otherFrameInExtension(line) {
+    const at = line.lastIndexOf("@");
+    if (!/:\d+$/.test(line) || line.slice(0, Math.max(at, 0)).includes(":"))
+      return null;
+    if (at < 0 && !/^[a-z][\w+.-]*:\S*:\d+$/i.test(line))
+      return null;
+    return EXTENSION_URL.test(line.slice(at + 1));
+  }
+  function messageEnd(stack, name, message) {
+    const count = message.split(`
+`, 10001).length;
+    if (count > 1e4)
+      return -1;
+    let end = -1;
+    for (let n = count;n > 0; n--) {
+      end = stack.indexOf(`
+`, end + 1);
+      if (end < 0)
+        return -1;
+    }
+    const header = stack.slice(0, stack[end - 1] === "\r" && !message.endsWith("\r") ? end - 1 : end);
+    if (header !== (name === "" ? message : message === "" ? name : `${name}: ${message}`))
+      return -1;
+    const next = stack.indexOf(`
+`, end + 1);
+    return CHROME_FRAME.test(stack.slice(end + 1, next < 0 ? undefined : next)) ? end : -1;
+  }
+  function thrownInExtension(thrown) {
+    if (typeof thrown !== "object" || thrown === null)
+      return null;
+    let stack;
+    let message;
+    let name;
+    try {
+      stack = thrown.stack;
+      message = thrown.message;
+      name = thrown.name;
+    } catch {}
+    if (typeof stack !== "string")
+      return null;
+    const end = typeof message === "string" && typeof name === "string" ? messageEnd(stack, name, message) : -1;
+    const frames = end < 0 ? stack : stack.slice(end);
+    const lines = frames.slice(0, 2000).split(`
+`);
+    if (frames.length > 2000)
+      lines.pop();
+    if (lines.some((line) => CHROME_FRAME.test(line))) {
+      const top = lines.find((line) => CHROME_FRAME.test(line) && !CHROME_FRAME_WITH_NO_SCRIPT.test(line));
+      if (top === undefined)
+        return null;
+      const foreign = chromeFrameInExtension(top);
+      return foreign && end < 0 ? null : foreign;
+    }
+    const top = lines.find((line) => line !== "" && !line.endsWith("[native code]"));
+    return top === undefined ? null : otherFrameInExtension(top);
+  }
+  function errorCrashType(event) {
+    const { error, message, filename, lineno } = event;
+    if (isBenignWindowError(message))
+      return null;
+    if (looksLikeChunkLoad(error))
+      return "chunk_load_import";
+    const named = typeof filename === "string" && filename !== "";
+    if ((error === null || error === undefined) && (message === "Script error." || message === "") && !named && lineno === 0) {
+      return "opaque";
+    }
+    if (thrownInExtension(error) ?? (named && EXTENSION_URL.test(filename)))
+      return "extension";
+    return "uncaught_error";
+  }
+  function rejectionCrashType(reason) {
+    if (looksLikeChunkLoad(reason))
+      return "chunk_load_import";
+    return thrownInExtension(reason) === true ? "extension" : "unhandled_rejection";
   }
   function isCoreAction(value) {
     return typeof value === "string" && CORE_ACTIONS.includes(value);
@@ -600,6 +820,9 @@
       ready() {},
       report() {},
       crash() {},
+      recovered() {},
+      isReady: () => false,
+      onReady() {},
       replay() {},
       track: runTracked(() => {})
     };
@@ -644,7 +867,7 @@
         if (action !== "load" && action !== "ready" && action !== "crash") {
           const count = windowCounts.get(action) ?? 0;
           if (count >= MAX_REPORTS_PER_ACTION_PER_WINDOW) {
-            warnOnce(`flood:${action}`, `"${action}" was reported more than ${MAX_REPORTS_PER_ACTION_PER_WINDOW} times in ${WINDOW_MS / 1000} s; the rest of this window's "${action}" reports are dropped — report once per user-level operation, not per element or frame`);
+            warnOnce(`flood:${action}`, `"${action}" was reported more than ${MAX_REPORTS_PER_ACTION_PER_WINDOW} times in ${WINDOW_MS / 1000} s; the rest of this window's "${action}" reports are dropped — report once per ${action === "encode" ? "try at making a file" : "user-level operation"}, not per element or frame`);
             return;
           }
           windowCounts.set(action, count + 1);
@@ -669,7 +892,9 @@
       } catch {}
     };
     let readyOutcome = null;
-    const crashes = new Set;
+    const crashes = new Map;
+    let hasRecovered = false;
+    let readyListener = () => {};
     let readyTimer = null;
     let readyLeftMs = readyTimeoutMs;
     let readyArmedAt = 0;
@@ -677,11 +902,26 @@
       readyOutcome = { outcome, ...errorType !== undefined && { errorType } };
       send("ready", outcome, errorType);
     };
+    let wasLate = false;
+    const noteIfLate = () => {
+      if (env.now() - readyArmedAt - readyLeftMs >= READY_LATE_MS)
+        wasLate = true;
+    };
+    const timeoutType = () => {
+      try {
+        noteIfLate();
+        if (wasLate)
+          return "timeout_late";
+        return env.progress === undefined ? "timeout" : `timeout_${timeoutStageOf(env.progress())}`;
+      } catch {
+        return "timeout";
+      }
+    };
     const onReadyTimeout = () => {
       readyTimer = null;
       if (readyOutcome !== null)
         return;
-      settleReady("failure", crashes.size > 0 ? "threw_before_ready" : "timeout");
+      settleReady("failure", crashes.size > 0 ? "threw_before_ready" : timeoutType());
     };
     const armReadyTimer = () => {
       if (readyOutcome !== null || readyTimer !== null)
@@ -694,6 +934,7 @@
         return;
       env.clearTimeout(readyTimer);
       readyTimer = null;
+      noteIfLate();
       readyLeftMs = Math.max(READY_RESUME_FLOOR_MS, readyLeftMs - (env.now() - readyArmedAt));
     };
     try {
@@ -754,13 +995,17 @@
           readyTimer = null;
         }
         settleReady("success");
+        try {
+          readyListener();
+        } catch {}
       },
       report,
       track: runTracked(report),
-      crash(errorType) {
-        if (crashes.has(errorType))
+      crash(given) {
+        const errorType = CRASH_TYPES.includes(given) ? given : "uncaught_error";
+        if (crashes.has(crashFamily(errorType)))
           return;
-        crashes.add(errorType);
+        crashes.set(crashFamily(errorType), errorType);
         send("crash", "failure", errorType);
         if (errorType === "unsupported_browser" && readyOutcome === null) {
           if (readyTimer !== null) {
@@ -772,14 +1017,98 @@
           settleReady("failure", "unsupported_browser");
         }
       },
+      recovered() {
+        if (hasRecovered)
+          return;
+        hasRecovered = true;
+        send("crash", "failure", RECOVERED);
+      },
+      isReady: () => readyOutcome?.outcome === "success",
+      onReady(listener) {
+        readyListener = listener;
+      },
       replay() {
         send("load", "success", undefined, true);
-        for (const type of crashes)
+        for (const type of crashes.values())
           send("crash", "failure", type, true);
+        if (hasRecovered)
+          send("crash", "failure", RECOVERED, true);
         if (readyOutcome !== null) {
           send("ready", readyOutcome.outcome, readyOutcome.errorType, true);
         }
       }
+    };
+  }
+
+  // ../../packages/appifact-health/src/retry.ts
+  var RETRY_DELAYS_MS = [1000, 3000];
+  function mayBeTriedAgain(file, kind, page) {
+    if (!isOwnReleaseFile(page, file.href))
+      return false;
+    if (!file.script)
+      return kind === "style_own";
+    return kind === "script_own" && !file.async && file.type.trim().toLowerCase() !== "module";
+  }
+  function putAgain(doc, failed, appIsReady) {
+    const script = failed.tagName.toLowerCase() === "script";
+    if (script) {
+      const inOrder = Array.from(doc.querySelectorAll("script[src]")).filter((other) => other.async !== true);
+      if (appIsReady || doc.readyState === "loading" || inOrder.length !== 1 || inOrder[0] !== failed)
+        return null;
+    }
+    const next = doc.createElement(failed.tagName);
+    for (const attribute of Array.from(failed.attributes))
+      next.setAttribute(attribute.name, attribute.value);
+    if (script)
+      next.async = false;
+    failed.replaceWith(next);
+    return next.isConnected ? next : null;
+  }
+  function createRetries(page) {
+    const attempts = new WeakMap;
+    const seenFailing = new WeakSet;
+    let open = 0;
+    let arrived = 0;
+    let lostAScript = false;
+    let told = false;
+    const check = () => {
+      if (told || arrived === 0 || open > 0 || lostAScript || !page.appIsReady())
+        return;
+      told = true;
+      page.recovered();
+    };
+    return {
+      isTry: (file) => attempts.has(file),
+      failed(file) {
+        if (seenFailing.has(file))
+          return;
+        seenFailing.add(file);
+        const made = attempts.get(file) ?? 0;
+        if (made === 0)
+          open += 1;
+        const delay = RETRY_DELAYS_MS[made];
+        if (delay === undefined)
+          return;
+        page.setTimeout(() => {
+          let next = null;
+          try {
+            next = page.again(file);
+          } catch {}
+          if (next !== null)
+            attempts.set(next, made + 1);
+        }, delay * (1 + page.random() / 2));
+      },
+      lostAScript() {
+        lostAScript = true;
+      },
+      loaded(file) {
+        if (!attempts.delete(file))
+          return;
+        open -= 1;
+        arrived += 1;
+        check();
+      },
+      ready: check
     };
   }
 
@@ -821,12 +1150,24 @@
       now: () => performance.now(),
       visible: () => document.visibilityState !== "hidden",
       onVisibilityChange: (listener) => document.addEventListener("visibilitychange", listener),
+      progress,
       warn: warn2
     });
-    wireCrashes((type) => engine.crash(type));
+    wireCrashes(engine);
     wirePoke(() => engine.replay());
     installed2 = engine;
     return installed2;
+  }
+  function progress() {
+    const arrived = (href) => performance.getEntriesByName(href, "resource").length > 0;
+    const scripts = Array.from(document.querySelectorAll("script[src]")).filter((script) => isOwnReleaseFile(location, script.src));
+    const styles = Array.from(document.querySelectorAll('link[rel~="stylesheet" i]')).filter((link) => isOwnReleaseFile(location, link.href));
+    return {
+      readyState: document.readyState,
+      scripts: scripts.length,
+      scriptsAwaited: scripts.filter((script) => !arrived(script.src)).length,
+      stylesAwaited: styles.filter((link) => link.sheet === null && !arrived(link.href)).length
+    };
   }
   function inReportingContext() {
     try {
@@ -860,8 +1201,9 @@
   }
   var WATCH_ATTR = "data-frame-refused-watch";
   var UNSUPPORTED_ATTR = "data-frame-unsupported";
-  function wireCrashes(crash) {
+  function wireCrashes(engine) {
     try {
+      const crash = (type) => engine.crash(type);
       const html = document.documentElement;
       const gate = createVerdictGate(crash, {
         setTimeout: (callback, ms) => window.setTimeout(callback, ms),
@@ -874,6 +1216,28 @@
         },
         onHide: (listener) => window.addEventListener("pagehide", listener)
       });
+      const retries = createRetries({
+        setTimeout: (callback, ms) => window.setTimeout(callback, ms),
+        random: () => Math.random(),
+        again: (failed) => {
+          if (html.hasAttribute(UNSUPPORTED_ATTR))
+            return null;
+          const doc = {
+            readyState: document.readyState,
+            createElement: (tag) => document.createElement(tag),
+            querySelectorAll: (selector) => document.querySelectorAll(selector)
+          };
+          const next = putAgain(doc, failed, engine.isReady());
+          next?.addEventListener("load", () => retries.loaded(next));
+          return next;
+        },
+        appIsReady: () => engine.isReady(),
+        recovered: () => {
+          gate.waitNoLonger();
+          engine.recovered();
+        }
+      });
+      engine.onReady(() => retries.ready());
       const page = () => ({
         watched: html.hasAttribute(WATCH_ATTR),
         origin: location.origin,
@@ -882,21 +1246,40 @@
       window.addEventListener("error", (event) => {
         try {
           if (event instanceof ErrorEvent) {
-            if (isBenignWindowError(event.message))
+            const type = errorCrashType(event);
+            if (type === null)
               return;
-            crash(looksLikeChunkLoad(event.error) ? "chunk_load" : "uncaught_error");
+            if (type === "chunk_load_import")
+              retries.lostAScript();
+            crash(type);
             return;
           }
           const target = event.target;
-          if (target instanceof HTMLScriptElement || target instanceof HTMLLinkElement && failedLinkIsCrash(target, location.origin)) {
-            const href = target instanceof HTMLScriptElement ? target.src : target.href;
-            gate.fail(awaitsUnsupportedVerdict(page(), href));
+          if (!(target instanceof HTMLScriptElement || target instanceof HTMLLinkElement))
+            return;
+          if (target.hasAttribute("data-page-retries"))
+            return;
+          if (retries.isTry(target)) {
+            retries.failed(target);
+            return;
           }
+          const file = target instanceof HTMLScriptElement ? { script: true, href: target.src, type: target.type, async: target.async } : { script: false, rel: target.rel, as: target.as, href: target.href };
+          const kind = failedFileKind(file, location.origin);
+          if (kind === null)
+            return;
+          gate.fail(awaitsUnsupportedVerdict(page(), file.href), kind);
+          if (mayBeTriedAgain(file, kind, page()))
+            retries.failed(target);
+          else if (file.script && !file.async && isOwnReleaseFile(page(), file.href))
+            retries.lostAScript();
         } catch {}
       }, true);
       window.addEventListener("unhandledrejection", (event) => {
         try {
-          crash(looksLikeChunkLoad(event.reason) ? "chunk_load" : "unhandled_rejection");
+          const type = rejectionCrashType(event.reason);
+          if (type === "chunk_load_import")
+            retries.lostAScript();
+          crash(type);
         } catch {}
       });
     } catch {}
@@ -928,8 +1311,9 @@
   // src/health.ts
   var health = init2({ key, monitoring });
   init({ key, capabilities });
-  onRuntimeMounted(() => health.ready());
+  onRuntimeMounted(() => whenIndexAnswered(() => health.ready()));
 })();</script>
+<script>(()=>{var gn=(BigInt(1)<<BigInt(128))-BigInt(1);var b={w:320,h:56};var y="canvas.json";var x=2,T={w:b.w*x,h:b.h*x,scale:x};var W={s:14,m:24,l:40,xl:72,xxl:120},V=14;var Sn={note:{size:V,kind:"note",bold:!1,italic:!1,color:"default",fill:"default"},title1:{size:W.xl,kind:"title1",bold:!0,italic:!1,color:"default",fill:"default"}};var Y=8000,wn=Y/2;var An={rect:[120,120],oval:[96,96],line:[160,0],arrow:[160,0],pen:[2,2],image:[320,240],link:[T.w,T.h]};function S(n){return n.endsWith(".dc.html")}var P="design",G="meta",Tn=P+"/"+G,Z="source",Pn=P+"/"+Z;var q=245760;var Rn=q-2048,l=/\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i,J=/(^|\/)(node_modules\/.*|(package(-lock)?|npm-shrinkwrap|composer|bower|cypress|jasmine|cdk|railway|claudia|cloudbuild|renovate|biome|app|nodemon|turbo|vercel|now|firebase|nx|project|workspace|angular|lerna|rush)\.json|wrangler\.jsonc?|(ts|js)config(\.[^/]*)?\.json|deno\.jsonc?|[^/]*\.(config|conf|workspace|mix)(\.[^/]*)?\.([cm]?[jt]sx?|json)|(gulp|grunt|jake|danger|plop|broc)file(\.[^/]*)?\.[cm]?[jt]sx?|(gatsby-(config|node|ssr|browser)|ember-cli-build|(brunch|truffle|bs|workbox|sw-precache|medusa|migrate-mongo)-config|truffle|knexfile|testem|cucumber|wallaby|serverless|ormconfig|electron-builder|nightwatch|newrelic|lighthouserc|codegen|setup(Tests|Proxy))(\.[^/]*)?\.([cm]?[jt]sx?|json)|((test|tests|spec|cypress|__tests__|__mocks__)\/.*|([^/]*[._-])?(test|spec)+|(test|spec)[._-][^/]*|[^/]*\.(cy|stories))\.[cm]?[jt]sx?)$/i,Q=/\.(css|m?js|jsx|tsx|json)$/i;function R(n){return l.test(n)||Q.test(n)&&!J.test(n)}var nn=300,en=/^[A-Za-z0-9_](?:[A-Za-z0-9 ._-]*[A-Za-z0-9_-])?$/,tn=/^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;function C(n){return typeof n==="string"&&n.length>0&&n.length<=nn&&!n.includes("..")&&n.split("/").every((e)=>en.test(e)&&!tn.test(e))}var M={design:"project/canvas.json",slides:"project/deck.json",designSystem:"project/design-system.json"};var rn={design:["canvas.json","migration.json"],slides:["deck.json","migration.json","store-meta.json"],design_system:["design-system.json","migration.json","design-system.before-files.json","publish-progress.json","migration-map.json"],migrated_design:["compat.json","publish-progress.json"]};var on=(n,e)=>e.startsWith("project/")&&rn[n].includes(e.slice(8));var O=(n,e)=>!n.startsWith("project/")||e!==void 0&&on(e,n)?void 0:n.slice(8);var N=1024,v=2097152;function sn(n){let e=O(n.path,"design");if(e===void 0||e===y||!C(e))return null;if(!S(e)&&!R(e))return null;if(n.size>v)return null;return e}function I(n){if(!n.some((t)=>t.path===M.design))return[];let e=n.filter((t)=>sn(t)!==null).map((t)=>t.path).sort().slice(0,N-1);return[...e.filter((t)=>!l.test(t)),...e.filter((t)=>l.test(t))]}function L(n=document){return n.documentElement.hasAttribute("data-frame-capture")}var Bn=new Uint32Array([1116352408,1899447441,3049323471,3921009573,961987163,1508970993,2453635748,2870763221,3624381080,310598401,607225278,1426881987,1925078388,2162078206,2614888103,3248222580,3835390401,4022224774,264347078,604807628,770255983,1249150122,1555081692,1996064986,2554220882,2821834349,2952996808,3210313671,3336571891,3584528711,113926993,338241895,666307205,773529912,1294757372,1396182291,1695183700,1986661051,2177026350,2456956037,2730485921,2820302411,3259730800,3345764771,3516065817,3600352804,4094571909,275423344,430227734,506948616,659060556,883997877,958139571,1322822218,1537002063,1747873779,1955562222,2024104815,2227730452,2361852424,2428436474,2756734187,3204031479,3329325298]);var Wn=String.fromCharCode(65533);var B=(n)=>/\.html?$/i.test(n),F="\x3C!-- frame-runtime -->",j="\x3C!-- /frame-runtime -->";function z(n){let e=n.indexOf(F);if(e<0)return n;let t=n.indexOf(j,e+F.length);return t<0?n:n.slice(0,e)+n.slice(t+j.length)}var an="__appifact_early_reads",D="_files.json",cn=64,dn=6;var un=(n)=>new URL(n,document.baseURI).href,ln=(n)=>[...new Uint8Array(n)].map((e)=>e.toString(16).padStart(2,"0")).join("");function U(n,e,t){let s=new AbortController,r={answer:(async()=>{let o=await fetch(n,{credentials:"same-origin",priority:e,signal:s.signal});if(r.answeredAt=r.heardAt=Date.now(),(o.status===429||o.status>=500)&&e!=="low")return{status:o.status,type:""};if(o.status!==200)return;let a=[],f=o.body?.getReader();for(let c;(c=await f?.read())!==void 0&&!c.done;r.heardAt=Date.now())a.push(c.value);let d=new Uint8Array(await new Blob(a).arrayBuffer());return!s.signal.aborted&&await t(o,d)?{status:200,bytes:d,type:o.headers.get("content-type")??""}:void 0})().catch(()=>{return}).finally(()=>{r.ended=!0}),sentAt:Date.now(),heardAt:Date.now(),stop:()=>s.abort()};return r}function fn(n,e){if(!B(n))return e;let t=new TextDecoder("utf-8",{ignoreBOM:!0}).decode(e),s=z(t);return s===t?e:new TextEncoder().encode(s)}function H(n,{bytes:e,paced:t}){try{let s=/\/_f\/([^/]+)\//.exec(location.pathname)?.[1],w=globalThis.__FRAME_PREAMBLE?.cred;if(s===void 0||w===void 0||L()||crypto.subtle===void 0)return;let r={reads:new Map,queued:new Map,listed:new Map,awayAt:-1/0},o=()=>{for(let[f,d]of r.queued)return r.queued.delete(f),d()},a=un(D);r.reads.set(a,U(a,"auto",(f,d)=>{let c=JSON.parse(new TextDecoder().decode(d)),p=c.files;if(f.redirected||c.ver!==s||c.narrowed===!0||p===null||typeof p!=="object"||Array.isArray(p))return!1;let A={now:e,paced:t?.bytes??0},K=Object.entries(p).map(([i,u])=>({path:i,size:typeof u?.size==="number"?u.size:1/0})),k=n(K).slice(0,cn);if(k.length===0)return!1;for(let i of k){let{sha256:u,size:h}=p[i]??{},g=new URL(i.split("/").map(encodeURIComponent).join("/"),a).href,m=t?.is(i)===!0?"paced":"now";if(typeof u!=="string"||typeof h!=="number"||h>A[m]||!g.startsWith(a.slice(0,-D.length)))continue;A[m]-=h,r.listed.set(g,{path:i,sha256:u});let _=()=>{let E=U(g,m==="paced"?"low":"auto",async(pn,X)=>ln(await crypto.subtle.digest("SHA-256",fn(i,X)))===u);return r.reads.set(g,E),E};if(m==="now")_();else r.queued.set(g,()=>void _().answer.then(o))}for(let i=0;i<dn;i++)o();return!0})),document.addEventListener("visibilitychange",()=>{r.awayAt=Date.now()}),globalThis[an]=r}catch{}}H(I,{bytes:131072,paced:{is:(n)=>l.test(n),bytes:524288}});})();</script>
 <title>Design</title>
 <!-- README
 # Design appifact — shared type
@@ -964,17 +1348,19 @@ by the same boundary on load.
 <meta name="README" content="Appifact type: Design (canvas). This page is the shared runtime; a canvas’s editable state (artboards, support files, notes, title) lives in its own files, all under project/: the index project/canvas.json and one project/&lt;path> file per artboard — this page carries none, and a canvas is empty only when project/ holds no .dc.html file outside ds/. Canvases are created from this type and inherit its capabilities {&quot;downloads&quot;:{},&quot;artifact&quot;:{},&quot;comments&quot;:{&quot;composer_only&quot;:true,&quot;customAnchors&quot;:true},&quot;room&quot;:{},&quot;db&quot;:{&quot;rules&quot;:[{&quot;path&quot;:&quot;&quot;,&quot;write&quot;:&quot;admin&quot;}]},&quot;assets&quot;:{},&quot;user&quot;:{&quot;scopes&quot;:[&quot;profile&quot;]},&quot;sample&quot;:{},&quot;paste&quot;:{}}. The README comment at the top of head has details.">
 <meta name="appifact-capabilities" content="{&quot;downloads&quot;:{},&quot;artifact&quot;:{},&quot;comments&quot;:{&quot;composer_only&quot;:true,&quot;customAnchors&quot;:true},&quot;room&quot;:{},&quot;db&quot;:{&quot;rules&quot;:[{&quot;path&quot;:&quot;&quot;,&quot;write&quot;:&quot;admin&quot;}]},&quot;assets&quot;:{},&quot;user&quot;:{&quot;scopes&quot;:[&quot;profile&quot;]},&quot;sample&quot;:{},&quot;paste&quot;:{}}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="mega-build-stamp" content="9ab8a134bb506be501a7678d7ef14c86">
+<script>(function(){try{var l=window.top!==window&&JSON.parse(window.name).lang;if(["de-DE","es-419","es-ES","fr-FR","hi-IN","id-ID","it-IT","ja-JP","ko-KR","pt-BR"].indexOf(l)<0)return;window.__appifact_i18n={lang:l,words:fetch("artifact-type/i18n/"+l+".js",{credentials:"same-origin"}).then(function(r){return r.ok?r.json():null}).catch(function(){return null})}}catch(e){}})()</script>
+<meta name="mega-build-stamp" content="9e96fe737859ea26e0df552da5ca40a9">
 <meta name="dc-runtime-file" content="artifact-type/dc-runtime.js">
 <meta name="fast-edit-worker-file" content="artifact-type/fast-edit-worker.js">
 <script>try{if(!document.documentElement.getAttribute("data-theme"))document.documentElement.setAttribute("data-theme",matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
 <script id="appifact-mode">(function(){var h=document.documentElement;function s(){var t=h.getAttribute('data-theme');if(t==='light'||t==='dark'){h.setAttribute('data-mode',t)}else{h.removeAttribute('data-mode')}}s();if(typeof MutationObserver==='function'){new MutationObserver(s).observe(h,{attributes:true,attributeFilter:['data-theme']})}})();</script>
-<link rel="preload" as="font" type="font/woff2" href="https://fonts.frame.claudeusercontent.com/_runtime/AnthropicSans-Roman-Variable-26-179-2.542f0e8bf7a27f23.woff2" crossorigin>
-<style>@font-face{font-family:"Anthropic Sans";src:url(https://fonts.frame.claudeusercontent.com/_runtime/AnthropicSans-Roman-Variable-26-179-2.542f0e8bf7a27f23.woff2) format("woff2"),url(/_runtime/AnthropicSans-Roman-Variable-26-179-2.542f0e8bf7a27f23.woff2) format("woff2");font-weight:300 800;font-style:normal;font-display:swap;font-feature-settings:"dlig" 0}</style>
-<script>try{document.fonts.load('1em "Anthropic Sans"').catch(function(){})}catch(e){}</script>
+<script>document.documentElement.hasAttribute("data-frame-capture")&&(document.head.appendChild(Object.assign(document.createElement("link"),{rel:"preload",as:"script",href:"artifact-type/capture.js"})),new MutationObserver(function(_,o){var s=document.querySelector('script[src="artifact-type/app.js"]');s&&(o.disconnect(),s.src="artifact-type/capture.js")}).observe(document.documentElement,{childList:true,subtree:true}))</script>
+<link rel="preload" as="font" type="font/woff2" href="https://fonts.frame.claudeusercontent.com/_runtime/AnthropicSansMicro-Text-Variable-26-245-1.5161b683881e7914.woff2" crossorigin>
+<style>@font-face{font-family:"Anthropic Sans";src:url(https://fonts.frame.claudeusercontent.com/_runtime/AnthropicSansMicro-Text-Variable-26-245-1.5161b683881e7914.woff2) format("woff2"),url(/_runtime/AnthropicSansMicro-Text-Variable-26-245-1.5161b683881e7914.woff2) format("woff2");font-weight:300 800;font-style:normal;font-display:swap;font-feature-settings:"dlig" 0,"ss01" 1,"ss02" 1;unicode-range:U+0-5B,U+5D-A0,U+A2-A3,U+A5-316,U+318-3C8,U+3CA-DFFF,U+E140-10FFFF}</style>
+<script>try{document.documentElement.hasAttribute("data-frame-capture")||document.fonts.load('1em "Anthropic Sans"').catch(function(){})}catch(e){}</script>
 <link rel="preload" as="font" type="font/woff2" href="artifact-type/fonts/anthropicons-variable.woff2" crossorigin>
 <style>@font-face{font-family:Anthropicons-Variable;src:url(artifact-type/fonts/anthropicons-variable.woff2) format("woff2-variations");font-weight:400 700;font-display:block}</style>
-<script>try{document.fonts.load('1em "Anthropicons-Variable"').catch(function(){})}catch(e){}</script>
+<script>try{document.documentElement.hasAttribute("data-frame-capture")||document.fonts.load('1em "Anthropicons-Variable"').catch(function(){})}catch(e){}</script>
 <link rel="stylesheet" href="artifact-type/app.css">
 </head>
 <body>

@@ -1,0 +1,250 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-11-19T15:18:56Z"
+ },
+ "title": "Прикорм без паники · гайд",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 794,
+   "h": 1123,
+   "title": "01 · Обложка"
+  },
+  "P02-Privet.dc.html": {
+   "x": 874,
+   "y": 0,
+   "w": 794,
+   "h": 1123,
+   "title": "02 · Привет"
+  },
+  "P03-Soderzhanie.dc.html": {
+   "x": 1748,
+   "y": 0,
+   "w": 794,
+   "h": 1123,
+   "title": "03 · Содержание"
+  },
+  "P04-Principy.dc.html": {
+   "x": 2622,
+   "y": 0,
+   "w": 794,
+   "h": 1123,
+   "title": "04 · Пять принципов"
+  },
+  "P05-Kogda.dc.html": {
+   "x": 3496,
+   "y": 0,
+   "w": 794,
+   "h": 1123,
+   "title": "05 · Когда начинать"
+  },
+  "P06-Gotovnost.dc.html": {
+   "x": 4370,
+   "y": 0,
+   "w": 794,
+   "h": 1123,
+   "title": "06 · Признаки готовности"
+  },
+  "P07-Podhody.dc.html": {
+   "x": 5244,
+   "y": 0,
+   "w": 794,
+   "h": 1123,
+   "title": "07 · Подходы к прикорму"
+  },
+  "P08-Tekstury.dc.html": {
+   "x": 0,
+   "y": 1243,
+   "w": 794,
+   "h": 1123,
+   "title": "08 · Текстуры по месяцам"
+  },
+  "P09-Otvetstvennost.dc.html": {
+   "x": 874,
+   "y": 1243,
+   "w": 794,
+   "h": 1123,
+   "title": "09 · Кто за что отвечает"
+  },
+  "P10-Kormlenie.dc.html": {
+   "x": 1748,
+   "y": 1243,
+   "w": 794,
+   "h": 1123,
+   "title": "10 · Одно кормление"
+  },
+  "P11-Zhelezo.dc.html": {
+   "x": 2622,
+   "y": 1243,
+   "w": 794,
+   "h": 1123,
+   "title": "11 · Железо"
+  },
+  "P12-Tarelka.dc.html": {
+   "x": 3496,
+   "y": 1243,
+   "w": 794,
+   "h": 1123,
+   "title": "12 · Тарелка дня"
+  },
+  "P13-Allergeny.dc.html": {
+   "x": 4370,
+   "y": 1243,
+   "w": 794,
+   "h": 1123,
+   "title": "13 · Аллергены"
+  },
+  "P14-Treker-allergenov.dc.html": {
+   "x": 5244,
+   "y": 1243,
+   "w": 794,
+   "h": 1123,
+   "title": "14 · Трекер аллергенов"
+  },
+  "P15-Napitki.dc.html": {
+   "x": 0,
+   "y": 2486,
+   "w": 794,
+   "h": 1123,
+   "title": "15 · Напитки"
+  },
+  "P16-Otlozhit.dc.html": {
+   "x": 874,
+   "y": 2486,
+   "w": 794,
+   "h": 1123,
+   "title": "16 · Что отложить"
+  },
+  "P17-Refleks.dc.html": {
+   "x": 1748,
+   "y": 2486,
+   "w": 794,
+   "h": 1123,
+   "title": "17 · Рвотный рефлекс и поперхивание"
+  },
+  "P18-Narezka.dc.html": {
+   "x": 2622,
+   "y": 2486,
+   "w": 794,
+   "h": 1123,
+   "title": "18 · Безопасная нарезка"
+  },
+  "P18b-Narezka-kartinki.dc.html": {
+   "x": 3496,
+   "y": 2486,
+   "w": 794,
+   "h": 1123,
+   "title": "19 · Нарезка в картинках"
+  },
+  "P19-Bezopasnyy-stol.dc.html": {
+   "x": 4370,
+   "y": 2486,
+   "w": 794,
+   "h": 1123,
+   "title": "20 · Безопасный стол"
+  },
+  "P20-Skolko.dc.html": {
+   "x": 5244,
+   "y": 2486,
+   "w": 794,
+   "h": 1123,
+   "title": "21 · Сколько раз в день"
+  },
+  "P21-Pervyy-mesyac.dc.html": {
+   "x": 0,
+   "y": 3729,
+   "w": 794,
+   "h": 1123,
+   "title": "22 · Первый месяц"
+  },
+  "P22-Primer-dnya.dc.html": {
+   "x": 874,
+   "y": 3729,
+   "w": 794,
+   "h": 1123,
+   "title": "23 · Пример дня"
+  },
+  "P23-Otkaz.dc.html": {
+   "x": 1748,
+   "y": 3729,
+   "w": 794,
+   "h": 1123,
+   "title": "24 · Отказ от еды"
+  },
+  "P24-Kogda-k-vrachu.dc.html": {
+   "x": 2622,
+   "y": 3729,
+   "w": 794,
+   "h": 1123,
+   "title": "25 · Когда к врачу"
+  },
+  "P25-Voprosy.dc.html": {
+   "x": 3496,
+   "y": 3729,
+   "w": 794,
+   "h": 1123,
+   "title": "26 · Частые вопросы"
+  },
+  "P26-Treker-produktov.dc.html": {
+   "x": 4370,
+   "y": 3729,
+   "w": 794,
+   "h": 1123,
+   "title": "27 · Трекер продуктов"
+  },
+  "P27-Istochniki.dc.html": {
+   "x": 5244,
+   "y": 3729,
+   "w": 794,
+   "h": 1123,
+   "title": "28 · Источники"
+  },
+  "P28-Final.dc.html": {
+   "x": 0,
+   "y": 4972,
+   "w": 794,
+   "h": 1123,
+   "title": "29 · Финал и контакты"
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "P02-Privet.dc.html",
+  "P03-Soderzhanie.dc.html",
+  "P04-Principy.dc.html",
+  "P05-Kogda.dc.html",
+  "P06-Gotovnost.dc.html",
+  "P07-Podhody.dc.html",
+  "P08-Tekstury.dc.html",
+  "P09-Otvetstvennost.dc.html",
+  "P10-Kormlenie.dc.html",
+  "P11-Zhelezo.dc.html",
+  "P12-Tarelka.dc.html",
+  "P13-Allergeny.dc.html",
+  "P14-Treker-allergenov.dc.html",
+  "P15-Napitki.dc.html",
+  "P16-Otlozhit.dc.html",
+  "P17-Refleks.dc.html",
+  "P18-Narezka.dc.html",
+  "P18b-Narezka-kartinki.dc.html",
+  "P19-Bezopasnyy-stol.dc.html",
+  "P20-Skolko.dc.html",
+  "P21-Pervyy-mesyac.dc.html",
+  "P22-Primer-dnya.dc.html",
+  "P23-Otkaz.dc.html",
+  "P24-Kogda-k-vrachu.dc.html",
+  "P25-Voprosy.dc.html",
+  "P26-Treker-produktov.dc.html",
+  "P27-Istochniki.dc.html",
+  "P28-Final.dc.html"
+ ],
+ "notes": {},
+ "designSystems": []
+}

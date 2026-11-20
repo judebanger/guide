@@ -1,6 +1,6 @@
 # Diagrams — flowcharts, swimlanes, org charts, trees, timelines, system maps
 
-Read this if a slide shows boxes connected by lines. **Boxes first, in the file; lines second.** Pick the idiom (`diagram-recipes.md` § Idioms and § Rows), take its row and column numbers, and write `deck.html` with only the boxes (and lanes) plus a node-list comment — `<!-- A 0,0,320,120  B 448,0,320,120 … -->` — then build. Only then add connectors and labels, reading every coordinate off that list. If you notice you are computing connector coordinates before the boxes are written, stop and write the boxes.
+Read this if a slide shows boxes connected by lines. **Boxes first, in the file; lines second.** Pick the idiom (`diagram-recipes.md` § Idioms and § Rows), take its row and column numbers, and write the slide with only the boxes (and lanes) plus a node-list comment: `<!-- A 0,0,320,120  B 448,0,320,120 … -->`. Only then add connectors and labels, reading every coordinate off that list. If you notice you are computing connector coordinates before the boxes are written, stop and write the boxes.
 
 **Source order is paint order and reading order.** A screen reader or the PDF text layer gets only the `<p>`s, in source order — boxes first, so each edge label is heard after every box — and none of the lines. Put the structure in the words: number sequential steps in their box text, carry an edge's word into the step it leads to ("No → escalate to legal"), keep edge labels in the boxes' order, and let the slide's title or the line under it say what the diagram shows ("Four stages; legal gates the last two").
 
@@ -21,7 +21,7 @@ Read this if a slide shows boxes connected by lines. **Boxes first, in the file;
 
 - **Draw connectors from edge point to edge point**:
 
-  - **Edge points.** The middle of the right edge is at `(left+width, top+height/2)`. The middle of the bottom edge is at `(left+width/2, top+height)`. If a connector already uses an edge's midpoint, use another point on that edge.
+  - **Edge points.** Give each box `box-sizing:border-box`, or padding and a border push its edges out. The middle of the right edge is at `(left+width, top+height/2)`. The middle of the bottom edge is at `(left+width/2, top+height)`. If a connector already uses an edge's midpoint, use another point on that edge.
 
   - **Straight.** Draw the connector straight when the two points share a row or a column.
 
@@ -47,7 +47,7 @@ Read this if a slide shows boxes connected by lines. **Boxes first, in the file;
 
 - **Keep the slide within budget**: Allow 64px for the title (about 70px tall), a 40px gap, and 700px for the diagram host. That uses 810px of the slide's 824px height. With a pinned legend or source line at the bottom (a footer slide, see layout.md § Footer band), give the slide `padding:128px 128px 160px` and a 16px gap: 786px of a 792px budget. **Use the whole host**: the lowest row of boxes ends below y = 600 (the row tables in `diagram-recipes.md` § Rows do this for you); a diagram squeezed into the top half above an empty band reads as unfinished. If the brief allows two slides, split at about 12 nodes. If it must be one slide, keep 24px text and use the Rows and fewer-columns rules to make it fit; do not shrink the text (the one exception is the dense-swimlane plan in `diagram-recipes.md` § Swimlane).
 
-- **Before you save a pinned diagram, check the source — the geometry is the check.** The build cannot see where connector legs run, SVG lines, angled labels or diamond text, so go down your node list once: (1) every connector's `x1,y1` and `x2,y2` is an edge midpoint of a listed box, or a bus / junction point from a recipe — none is "about there"; (2) every horizontal leg's y is in a gap between rows, and every vertical leg's x is in a gap between columns or at a column centre where it enters a box from above or below; (3) every label `<p>` is at least 8px from every line and every box; (4) boxes are at least 32px apart (except boxes that deliberately touch and share one stroke) and inside the host; (5) the last build printed no `note: layout:` lines. If you built from the recipes, (1) and (2) hold by construction; check the connectors you improvised. Do not take screenshots or build a proof rig.
+- **Before you save a pinned diagram, check the source — the geometry is the check.** Nothing checks where connector legs run, SVG lines, angled labels or diamond text, so go down your node list once: (1) every connector's `x1,y1` and `x2,y2` is an edge midpoint of a listed box, or a bus / junction point from a recipe — none is "about there"; (2) every horizontal leg's y is in a gap between rows, and every vertical leg's x is in a gap between columns or at a column centre where it enters a box from above or below; (3) every label `<p>` is at least 8px from every line and every box; (4) boxes are at least 32px apart (except boxes that deliberately touch and share one stroke) and inside the host; (5) no `note: layout:` lines remain, if you built. If you built from the recipes, (1) and (2) hold by construction; check the connectors you improvised. To look at it, see `viewer.md`.
 
 ## The connector element
 

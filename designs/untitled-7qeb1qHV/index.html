@@ -38,6 +38,10 @@
         "design_cross_canvas_paste_confirm",
         "design_fast_edit",
         "design_fast_edit_sample",
+        "design_fixed_fade_wait",
+        "design_index_read_first",
+        "design_no_early_reads",
+        "design_no_script_preload",
         "design_theme_tab",
         "tidal_glowing_ember"
       ]
@@ -59,6 +63,21 @@
     ],
     readyTimeoutS: 60
   };
+
+  // ../../design-editor/src/host/tree/index-pending.ts
+  var INDEX_PENDING_ATTR = "data-index-pending";
+  function whenIndexAnswered(cb, doc = document) {
+    const html = doc.documentElement;
+    if (!html.hasAttribute(INDEX_PENDING_ATTR))
+      return cb();
+    const mo = new MutationObserver(() => {
+      if (html.hasAttribute(INDEX_PENDING_ATTR))
+        return;
+      mo.disconnect();
+      cb();
+    });
+    mo.observe(html, { attributes: true, attributeFilter: [INDEX_PENDING_ATTR] });
+  }
 
   // ../../packages/appifact-flags/src/vocabulary.ts
   var VERSION = "appifact-flags:v2";
@@ -1238,6 +1257,8 @@
           const target = event.target;
           if (!(target instanceof HTMLScriptElement || target instanceof HTMLLinkElement))
             return;
+          if (target.hasAttribute("data-page-retries"))
+            return;
           if (retries.isTry(target)) {
             retries.failed(target);
             return;
@@ -1290,8 +1311,9 @@
   // src/health.ts
   var health = init2({ key, monitoring });
   init({ key, capabilities });
-  onRuntimeMounted(() => health.ready());
+  onRuntimeMounted(() => whenIndexAnswered(() => health.ready()));
 })();</script>
+<script>(()=>{var gn=(BigInt(1)<<BigInt(128))-BigInt(1);var b={w:320,h:56};var y="canvas.json";var x=2,T={w:b.w*x,h:b.h*x,scale:x};var W={s:14,m:24,l:40,xl:72,xxl:120},V=14;var Sn={note:{size:V,kind:"note",bold:!1,italic:!1,color:"default",fill:"default"},title1:{size:W.xl,kind:"title1",bold:!0,italic:!1,color:"default",fill:"default"}};var Y=8000,wn=Y/2;var An={rect:[120,120],oval:[96,96],line:[160,0],arrow:[160,0],pen:[2,2],image:[320,240],link:[T.w,T.h]};function S(n){return n.endsWith(".dc.html")}var P="design",G="meta",Tn=P+"/"+G,Z="source",Pn=P+"/"+Z;var q=245760;var Rn=q-2048,l=/\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i,J=/(^|\/)(node_modules\/.*|(package(-lock)?|npm-shrinkwrap|composer|bower|cypress|jasmine|cdk|railway|claudia|cloudbuild|renovate|biome|app|nodemon|turbo|vercel|now|firebase|nx|project|workspace|angular|lerna|rush)\.json|wrangler\.jsonc?|(ts|js)config(\.[^/]*)?\.json|deno\.jsonc?|[^/]*\.(config|conf|workspace|mix)(\.[^/]*)?\.([cm]?[jt]sx?|json)|(gulp|grunt|jake|danger|plop|broc)file(\.[^/]*)?\.[cm]?[jt]sx?|(gatsby-(config|node|ssr|browser)|ember-cli-build|(brunch|truffle|bs|workbox|sw-precache|medusa|migrate-mongo)-config|truffle|knexfile|testem|cucumber|wallaby|serverless|ormconfig|electron-builder|nightwatch|newrelic|lighthouserc|codegen|setup(Tests|Proxy))(\.[^/]*)?\.([cm]?[jt]sx?|json)|((test|tests|spec|cypress|__tests__|__mocks__)\/.*|([^/]*[._-])?(test|spec)+|(test|spec)[._-][^/]*|[^/]*\.(cy|stories))\.[cm]?[jt]sx?)$/i,Q=/\.(css|m?js|jsx|tsx|json)$/i;function R(n){return l.test(n)||Q.test(n)&&!J.test(n)}var nn=300,en=/^[A-Za-z0-9_](?:[A-Za-z0-9 ._-]*[A-Za-z0-9_-])?$/,tn=/^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\..*)?$/i;function C(n){return typeof n==="string"&&n.length>0&&n.length<=nn&&!n.includes("..")&&n.split("/").every((e)=>en.test(e)&&!tn.test(e))}var M={design:"project/canvas.json",slides:"project/deck.json",designSystem:"project/design-system.json"};var rn={design:["canvas.json","migration.json"],slides:["deck.json","migration.json","store-meta.json"],design_system:["design-system.json","migration.json","design-system.before-files.json","publish-progress.json","migration-map.json"],migrated_design:["compat.json","publish-progress.json"]};var on=(n,e)=>e.startsWith("project/")&&rn[n].includes(e.slice(8));var O=(n,e)=>!n.startsWith("project/")||e!==void 0&&on(e,n)?void 0:n.slice(8);var N=1024,v=2097152;function sn(n){let e=O(n.path,"design");if(e===void 0||e===y||!C(e))return null;if(!S(e)&&!R(e))return null;if(n.size>v)return null;return e}function I(n){if(!n.some((t)=>t.path===M.design))return[];let e=n.filter((t)=>sn(t)!==null).map((t)=>t.path).sort().slice(0,N-1);return[...e.filter((t)=>!l.test(t)),...e.filter((t)=>l.test(t))]}function L(n=document){return n.documentElement.hasAttribute("data-frame-capture")}var Bn=new Uint32Array([1116352408,1899447441,3049323471,3921009573,961987163,1508970993,2453635748,2870763221,3624381080,310598401,607225278,1426881987,1925078388,2162078206,2614888103,3248222580,3835390401,4022224774,264347078,604807628,770255983,1249150122,1555081692,1996064986,2554220882,2821834349,2952996808,3210313671,3336571891,3584528711,113926993,338241895,666307205,773529912,1294757372,1396182291,1695183700,1986661051,2177026350,2456956037,2730485921,2820302411,3259730800,3345764771,3516065817,3600352804,4094571909,275423344,430227734,506948616,659060556,883997877,958139571,1322822218,1537002063,1747873779,1955562222,2024104815,2227730452,2361852424,2428436474,2756734187,3204031479,3329325298]);var Wn=String.fromCharCode(65533);var B=(n)=>/\.html?$/i.test(n),F="\x3C!-- frame-runtime -->",j="\x3C!-- /frame-runtime -->";function z(n){let e=n.indexOf(F);if(e<0)return n;let t=n.indexOf(j,e+F.length);return t<0?n:n.slice(0,e)+n.slice(t+j.length)}var an="__appifact_early_reads",D="_files.json",cn=64,dn=6;var un=(n)=>new URL(n,document.baseURI).href,ln=(n)=>[...new Uint8Array(n)].map((e)=>e.toString(16).padStart(2,"0")).join("");function U(n,e,t){let s=new AbortController,r={answer:(async()=>{let o=await fetch(n,{credentials:"same-origin",priority:e,signal:s.signal});if(r.answeredAt=r.heardAt=Date.now(),(o.status===429||o.status>=500)&&e!=="low")return{status:o.status,type:""};if(o.status!==200)return;let a=[],f=o.body?.getReader();for(let c;(c=await f?.read())!==void 0&&!c.done;r.heardAt=Date.now())a.push(c.value);let d=new Uint8Array(await new Blob(a).arrayBuffer());return!s.signal.aborted&&await t(o,d)?{status:200,bytes:d,type:o.headers.get("content-type")??""}:void 0})().catch(()=>{return}).finally(()=>{r.ended=!0}),sentAt:Date.now(),heardAt:Date.now(),stop:()=>s.abort()};return r}function fn(n,e){if(!B(n))return e;let t=new TextDecoder("utf-8",{ignoreBOM:!0}).decode(e),s=z(t);return s===t?e:new TextEncoder().encode(s)}function H(n,{bytes:e,paced:t}){try{let s=/\/_f\/([^/]+)\//.exec(location.pathname)?.[1],w=globalThis.__FRAME_PREAMBLE?.cred;if(s===void 0||w===void 0||L()||crypto.subtle===void 0)return;let r={reads:new Map,queued:new Map,listed:new Map,awayAt:-1/0},o=()=>{for(let[f,d]of r.queued)return r.queued.delete(f),d()},a=un(D);r.reads.set(a,U(a,"auto",(f,d)=>{let c=JSON.parse(new TextDecoder().decode(d)),p=c.files;if(f.redirected||c.ver!==s||c.narrowed===!0||p===null||typeof p!=="object"||Array.isArray(p))return!1;let A={now:e,paced:t?.bytes??0},K=Object.entries(p).map(([i,u])=>({path:i,size:typeof u?.size==="number"?u.size:1/0})),k=n(K).slice(0,cn);if(k.length===0)return!1;for(let i of k){let{sha256:u,size:h}=p[i]??{},g=new URL(i.split("/").map(encodeURIComponent).join("/"),a).href,m=t?.is(i)===!0?"paced":"now";if(typeof u!=="string"||typeof h!=="number"||h>A[m]||!g.startsWith(a.slice(0,-D.length)))continue;A[m]-=h,r.listed.set(g,{path:i,sha256:u});let _=()=>{let E=U(g,m==="paced"?"low":"auto",async(pn,X)=>ln(await crypto.subtle.digest("SHA-256",fn(i,X)))===u);return r.reads.set(g,E),E};if(m==="now")_();else r.queued.set(g,()=>void _().answer.then(o))}for(let i=0;i<dn;i++)o();return!0})),document.addEventListener("visibilitychange",()=>{r.awayAt=Date.now()}),globalThis[an]=r}catch{}}H(I,{bytes:131072,paced:{is:(n)=>l.test(n),bytes:524288}});})();</script>
 <title>Design</title>
 <!-- README
 # Design appifact — shared type
@@ -1327,7 +1349,7 @@ by the same boundary on load.
 <meta name="appifact-capabilities" content="{&quot;downloads&quot;:{},&quot;artifact&quot;:{},&quot;comments&quot;:{&quot;composer_only&quot;:true,&quot;customAnchors&quot;:true},&quot;room&quot;:{},&quot;db&quot;:{&quot;rules&quot;:[{&quot;path&quot;:&quot;&quot;,&quot;write&quot;:&quot;admin&quot;}]},&quot;assets&quot;:{},&quot;user&quot;:{&quot;scopes&quot;:[&quot;profile&quot;]},&quot;sample&quot;:{},&quot;paste&quot;:{}}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>(function(){try{var l=window.top!==window&&JSON.parse(window.name).lang;if(["de-DE","es-419","es-ES","fr-FR","hi-IN","id-ID","it-IT","ja-JP","ko-KR","pt-BR"].indexOf(l)<0)return;window.__appifact_i18n={lang:l,words:fetch("artifact-type/i18n/"+l+".js",{credentials:"same-origin"}).then(function(r){return r.ok?r.json():null}).catch(function(){return null})}}catch(e){}})()</script>
-<meta name="mega-build-stamp" content="3f380c8a205265434948187ec246cab3">
+<meta name="mega-build-stamp" content="9e96fe737859ea26e0df552da5ca40a9">
 <meta name="dc-runtime-file" content="artifact-type/dc-runtime.js">
 <meta name="fast-edit-worker-file" content="artifact-type/fast-edit-worker.js">
 <script>try{if(!document.documentElement.getAttribute("data-theme"))document.documentElement.setAttribute("data-theme",matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>

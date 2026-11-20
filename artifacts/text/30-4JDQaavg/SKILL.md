@@ -57,7 +57,7 @@ connector's `batch` tool: a top-level
 (`project` is the connector's wire word for a doc, as `file` is for a tab)
 plus, as the batch members, the doc's skeleton (title block first, then each
 section heading with at most one placeholder line). Fill the sections right
-after with the connector's `update` tool, one call per section. The birth
+after with the connector's `update` tool, one call per section. How to draw is taught only in the connector's `guide( items = ["topic.diagram"] )` and `guide( items = ["topic.charts"] )`, each best read in a call of its own (a long answer may reach you as a file, not as text). So a section with a shape that reads best drawn (steps that branch, loop or change hands, an architecture, a hierarchy, a timeline of milestones, items on two axes, a funnel; five or more values of one measure over time or across items) goes into the skeleton as a `pending` block whose `intent` names the picture, even if it is the whole doc; read its topic right after the birth, before you fill it. A straight run of steps, however long, even a machine's or a job's, stays a numbered list, and a short memo or note or two or three figures stay prose: they get no picture and need neither topic. The birth
 acknowledgement says `created.bound: true` once the viewer is bound;
 `created.bound: false` (with a `notice`) means the link cannot open the doc
 yet — say so plainly rather than calling it ready, and bind it or tell the

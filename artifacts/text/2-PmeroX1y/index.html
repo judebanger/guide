@@ -46,11 +46,12 @@
     flags: {
       keys: [
         "appifact_bottom_toolbar",
-        "appifact_creation_sequence",
-        "appifact_extra_export_formats",
         "appifact_icon_set",
+        "appifact_inspector_v1",
+        "slides_no_early_reads",
         "slides_phone_remote",
         "slides_send_to_google_slides",
+        "slides_source_decks",
         "slides_theme_tab",
         "tidal_glowing_ember"
       ]
@@ -69,13 +70,14 @@
       "insert",
       "delete",
       "reorder",
-      "upload"
+      "upload",
+      "check"
     ],
     readyTimeoutS: 60
   };
 
   // ../../packages/appifact-flags/src/vocabulary.ts
-  var VERSION = "appifact-flags:v1";
+  var VERSION = "appifact-flags:v2";
   var FLAGS_GLOBAL = "__appifact_flags";
   var APP_KEY_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
   var APP_FLAG_KEY_RE = /^[a-z][a-z0-9_]{0,63}$/;
@@ -97,6 +99,8 @@
     }
   }
   var READY_TIMEOUT_MS = 1500;
+  var ASK_AGAIN_MS = 30 * 60000;
+  var ASKS_AGAIN_MAX = 7;
   var MAX_UNDECLARED_WARNINGS = 8;
   function manifestProblem(manifest) {
     if (!isRecord(manifest)) {
@@ -208,6 +212,13 @@
         } catch {
           return {};
         }
+      },
+      latest: get,
+      onLatest: () => () => {
+        return;
+      },
+      askAgain: () => {
+        return;
       }
     };
   }
@@ -216,6 +227,10 @@
     let values = null;
     let answered = false;
     let warnedLate = false;
+    let live = {};
+    const listeners = new Set;
+    const now = () => env.now?.() ?? Date.now();
+    let [askedAt, asksAgain] = [now(), 0];
     const waiters = [];
     const undeclared = undeclaredWarner(manifest, env.warn);
     const settleAll = (taken, byAnswer) => {
@@ -267,19 +282,32 @@
           return {};
         }
       },
+      latest(key, fallback) {
+        try {
+          if (undeclared(key))
+            return fallback;
+          const v = Object.prototype.hasOwnProperty.call(live, key) ? live[key] : undefined;
+          return typeof v === "boolean" ? v : fallback;
+        } catch {
+          return fallback;
+        }
+      },
+      onLatest(heard) {
+        listeners.add(heard);
+        return () => void listeners.delete(heard);
+      },
+      askAgain() {
+        try {
+          if (asksAgain >= ASKS_AGAIN_MAX || now() - askedAt < ASK_AGAIN_MS)
+            return;
+          [askedAt, asksAgain] = [now(), asksAgain + 1];
+          env.post({ __frame_flags_ask: true });
+        } catch {}
+      },
       receive(data) {
         try {
           if (!isAnswer(data))
             return false;
-          if (values !== null) {
-            if (!answered && !warnedLate) {
-              warnedLate = true;
-              try {
-                env.warn(`the viewer shell answered after READY_TIMEOUT_MS (${READY_TIMEOUT_MS} ms); this page load keeps its defaults`);
-              } catch {}
-            }
-            return true;
-          }
           const taken = {};
           for (const key of Object.keys(data.values)) {
             if (!isDeclarableKey(key) || !declared.has(key))
@@ -287,6 +315,24 @@
             const v = jsonValue(data.values[key]);
             if (v !== undefined)
               taken[key] = v;
+          }
+          const news = Object.entries(taken).filter(([key, v]) => typeof v === "boolean" && live[key] !== v);
+          if (news.length > 0) {
+            live = { ...live, ...Object.fromEntries(news) };
+            for (const heard of [...listeners]) {
+              try {
+                heard();
+              } catch {}
+            }
+          }
+          if (values !== null) {
+            if (!answered && !warnedLate) {
+              warnedLate = true;
+              try {
+                env.warn(`the viewer shell answered after READY_TIMEOUT_MS (${READY_TIMEOUT_MS} ms); this page load keeps its defaults, except where it reads latest()`);
+              } catch {}
+            }
+            return true;
           }
           settleAll(taken, true);
           return true;
@@ -341,7 +387,7 @@
   }
   function inFramedContext() {
     try {
-      return typeof window !== "undefined" && typeof location !== "undefined" && window.parent !== window && location.protocol === "https:";
+      return typeof window !== "undefined" && typeof location !== "undefined" && window.parent !== window && (location.protocol === "https:" || location.protocol === "cowork-artifact:");
     } catch {
       return false;
     }
@@ -406,7 +452,9 @@
     "connect",
     "insert",
     "delete",
-    "reorder"
+    "reorder",
+    "encode",
+    "check"
   ];
   var OUTCOMES = ["success", "failure", "aborted"];
   var ERROR_TYPE_RE = /^[a-z][a-z0-9_]{0,31}$/;
@@ -414,6 +462,7 @@
     "conflict",
     "read_only",
     "too_large",
+    "too_many_files",
     "invalid_content",
     "backpressure",
     "transient",
@@ -430,6 +479,8 @@
     "helper_error",
     "helper_start_timeout",
     "helper_init_timeout",
+    "hidden_page_error",
+    "hidden_page_timeout",
     "dom_encoding_error",
     "dom_operation_error",
     "dom_not_supported_error",
@@ -438,6 +489,25 @@
     "dom_security_error",
     "unknown"
   ];
+  var CHUNK_LOAD_KINDS = [
+    "script_own",
+    "script_other",
+    "style_own",
+    "style_other",
+    "preload_own",
+    "preload_other",
+    "font_own",
+    "import"
+  ];
+  var CRASH_TYPES = [
+    "uncaught_error",
+    "unhandled_rejection",
+    ...CHUNK_LOAD_KINDS.map((kind) => `chunk_load_${kind}`),
+    "unsupported_browser",
+    "opaque",
+    "extension"
+  ];
+  var TIMEOUT_STAGES = ["late", "script", "style", "document", "parsing", "parsed", "loaded"];
   var KNOWN_ERROR_TYPES = new Set([
     "boot_4xx",
     "boot_5xx",
@@ -447,11 +517,16 @@
     "csp_violation",
     "cap_load_error",
     "timeout",
+    ...TIMEOUT_STAGES.map((stage) => `timeout_${stage}`),
     "threw_before_ready",
     "uncaught_error",
     "unhandled_rejection",
     "chunk_load",
+    ...CHUNK_LOAD_KINDS.map((kind) => `chunk_load_${kind}`),
+    "chunk_load_recovered",
     "unsupported_browser",
+    "opaque",
+    "extension",
     ...ERROR_TYPES,
     "malformed"
   ]);
@@ -466,15 +541,30 @@
   var READY_TIMEOUT_S = { min: 5, max: 120, default: 20 };
   var WINDOW_MS = 15000;
   var MAX_REPORTS_PER_ACTION_PER_WINDOW = 1000;
+  var MAX_SLOT = 8;
   var SENTINEL = "appifact-health:v2";
   var HEALTH_GLOBAL = "__appifact_health";
 
   // ../../packages/appifact-health/src/health.ts
+  function timeoutStageOf(page) {
+    if (page.readyState === "complete")
+      return "loaded";
+    if (page.scriptsAwaited > 0)
+      return "script";
+    if (page.stylesAwaited > 0)
+      return "style";
+    if (page.readyState === "loading")
+      return page.scripts === 0 ? "document" : "parsing";
+    return "parsed";
+  }
+  var RECOVERED = "chunk_load_recovered";
+  var crashFamily = (type) => type.startsWith("chunk_load_") ? "chunk_load" : type;
   var UNSUPPORTED_FALLBACK_MS = 8000;
   function awaitsUnsupportedVerdict(page, fileHref) {
+    return page.watched && isOwnReleaseFile(page, fileHref);
+  }
+  function isOwnReleaseFile(page, fileHref) {
     try {
-      if (!page.watched)
-        return false;
       const ver = /^\/_f\/([^/]{1,128})\//.exec(page.pathname)?.[1];
       if (ver === undefined)
         return false;
@@ -484,9 +574,19 @@
       return false;
     }
   }
+  function isHttpOnOtherOrigin(pageOrigin, fileHref) {
+    try {
+      const url = new URL(fileHref);
+      return /^https?:$/.test(url.protocol) && url.origin !== pageOrigin;
+    } catch {
+      return false;
+    }
+  }
   function failedLinkIsCrash(link, origin) {
-    if (/(^|\s)(stylesheet|modulepreload)(\s|$)/i.test(link.rel))
+    if (/(^|\s)modulepreload(\s|$)/i.test(link.rel))
       return true;
+    if (/(^|\s)stylesheet(\s|$)/i.test(link.rel))
+      return !isHttpOnOtherOrigin(origin, link.href);
     if (!/(^|\s)preload(\s|$)/i.test(link.rel) || link.as !== "font")
       return false;
     try {
@@ -495,16 +595,31 @@
       return false;
     }
   }
+  function failedFileKind(file, origin) {
+    if (!file.script && !failedLinkIsCrash(file, origin))
+      return null;
+    let own = false;
+    try {
+      own = new URL(file.href).origin === origin;
+    } catch {}
+    if (file.script)
+      return own ? "script_own" : "script_other";
+    if (/(^|\s)stylesheet(\s|$)/i.test(file.rel))
+      return own ? "style_own" : "style_other";
+    if (/(^|\s)modulepreload(\s|$)/i.test(file.rel))
+      return own ? "preload_own" : "preload_other";
+    return "font_own";
+  }
   function createVerdictGate(crash, env, fallbackMs = UNSUPPORTED_FALLBACK_MS) {
     let decided = null;
-    let pending = false;
+    let pending = null;
     let timer = null;
     let stopWatching = () => {};
     const decide = (type) => {
       if (decided === type || decided === "unsupported_browser")
         return;
       decided = type;
-      pending = false;
+      pending = null;
       try {
         if (timer !== null)
           env.clearTimeout(timer);
@@ -515,29 +630,29 @@
       crash(type);
     };
     const settle = () => {
-      if (pending)
-        decide(env.marked() ? "unsupported_browser" : "chunk_load");
+      if (pending !== null)
+        decide(env.marked() ? "unsupported_browser" : `chunk_load_${pending}`);
     };
     try {
       env.onHide(settle);
     } catch {}
     return {
-      fail(awaitsVerdict) {
+      fail(awaitsVerdict, kind) {
         if (!awaitsVerdict) {
-          crash("chunk_load");
+          crash(`chunk_load_${kind}`);
           return;
         }
         if (decided !== null) {
           crash(decided);
           return;
         }
-        if (pending)
+        if (pending !== null)
           return;
         if (env.marked()) {
           decide("unsupported_browser");
           return;
         }
-        pending = true;
+        pending = kind;
         try {
           stopWatching = env.onMark(() => {
             if (env.marked())
@@ -545,11 +660,13 @@
           });
         } catch {}
         timer = env.setTimeout(settle, fallbackMs);
-      }
+      },
+      waitNoLonger: settle
     };
   }
   var MAX_WARNINGS = 10;
   var READY_RESUME_FLOOR_MS = 1000;
+  var READY_LATE_MS = 5000;
   var APPIFACT_ERROR_TYPES = new Map([
     ["conflict", "conflict"],
     ["read-only", "read_only"],
@@ -578,7 +695,93 @@
     if (typeof reason !== "object" || reason === null)
       return false;
     const r = reason;
-    return r.name === "ChunkLoadError" || typeof r.message === "string" && CHUNK_LOAD_MESSAGE.test(r.message);
+    try {
+      return r.name === "ChunkLoadError" || typeof r.message === "string" && CHUNK_LOAD_MESSAGE.test(r.message);
+    } catch {
+      return false;
+    }
+  }
+  var EXTENSION_URL = /^(?:chrome-extension|moz-extension|safari-extension|safari-web-extension|webkit-masked-url):/;
+  var CHROME_FRAME = /^\s*at (?:async )?/;
+  var CHROME_FRAME_WITH_NO_SCRIPT = /(?:\((?:<anonymous>|native|index \d+)\)|^\s*at (?:async )?<anonymous>)\r?$/;
+  function chromeFrameInExtension(line) {
+    const open = line.lastIndexOf(" (");
+    return EXTENSION_URL.test(open < 0 ? line.replace(CHROME_FRAME, "") : line.slice(open + 2));
+  }
+  function otherFrameInExtension(line) {
+    const at = line.lastIndexOf("@");
+    if (!/:\d+$/.test(line) || line.slice(0, Math.max(at, 0)).includes(":"))
+      return null;
+    if (at < 0 && !/^[a-z][\w+.-]*:\S*:\d+$/i.test(line))
+      return null;
+    return EXTENSION_URL.test(line.slice(at + 1));
+  }
+  function messageEnd(stack, name, message) {
+    const count = message.split(`
+`, 10001).length;
+    if (count > 1e4)
+      return -1;
+    let end = -1;
+    for (let n = count;n > 0; n--) {
+      end = stack.indexOf(`
+`, end + 1);
+      if (end < 0)
+        return -1;
+    }
+    const header = stack.slice(0, stack[end - 1] === "\r" && !message.endsWith("\r") ? end - 1 : end);
+    if (header !== (name === "" ? message : message === "" ? name : `${name}: ${message}`))
+      return -1;
+    const next = stack.indexOf(`
+`, end + 1);
+    return CHROME_FRAME.test(stack.slice(end + 1, next < 0 ? undefined : next)) ? end : -1;
+  }
+  function thrownInExtension(thrown) {
+    if (typeof thrown !== "object" || thrown === null)
+      return null;
+    let stack;
+    let message;
+    let name;
+    try {
+      stack = thrown.stack;
+      message = thrown.message;
+      name = thrown.name;
+    } catch {}
+    if (typeof stack !== "string")
+      return null;
+    const end = typeof message === "string" && typeof name === "string" ? messageEnd(stack, name, message) : -1;
+    const frames = end < 0 ? stack : stack.slice(end);
+    const lines = frames.slice(0, 2000).split(`
+`);
+    if (frames.length > 2000)
+      lines.pop();
+    if (lines.some((line) => CHROME_FRAME.test(line))) {
+      const top = lines.find((line) => CHROME_FRAME.test(line) && !CHROME_FRAME_WITH_NO_SCRIPT.test(line));
+      if (top === undefined)
+        return null;
+      const foreign = chromeFrameInExtension(top);
+      return foreign && end < 0 ? null : foreign;
+    }
+    const top = lines.find((line) => line !== "" && !line.endsWith("[native code]"));
+    return top === undefined ? null : otherFrameInExtension(top);
+  }
+  function errorCrashType(event) {
+    const { error, message, filename, lineno } = event;
+    if (isBenignWindowError(message))
+      return null;
+    if (looksLikeChunkLoad(error))
+      return "chunk_load_import";
+    const named = typeof filename === "string" && filename !== "";
+    if ((error === null || error === undefined) && (message === "Script error." || message === "") && !named && lineno === 0) {
+      return "opaque";
+    }
+    if (thrownInExtension(error) ?? (named && EXTENSION_URL.test(filename)))
+      return "extension";
+    return "uncaught_error";
+  }
+  function rejectionCrashType(reason) {
+    if (looksLikeChunkLoad(reason))
+      return "chunk_load_import";
+    return thrownInExtension(reason) === true ? "extension" : "unhandled_rejection";
   }
   function isCoreAction(value) {
     return typeof value === "string" && CORE_ACTIONS.includes(value);
@@ -615,6 +818,9 @@
       ready() {},
       report() {},
       crash() {},
+      recovered() {},
+      isReady: () => false,
+      onReady() {},
       replay() {},
       track: runTracked(() => {})
     };
@@ -654,12 +860,13 @@
     };
     let windowCounts = new Map;
     let windowTimer = null;
-    const send = (action, outcome, errorType, replayed) => {
+    const send = (action, outcome, errorType, more = {}) => {
+      const { replayed, slot } = more;
       try {
         if (action !== "load" && action !== "ready" && action !== "crash") {
           const count = windowCounts.get(action) ?? 0;
           if (count >= MAX_REPORTS_PER_ACTION_PER_WINDOW) {
-            warnOnce(`flood:${action}`, `"${action}" was reported more than ${MAX_REPORTS_PER_ACTION_PER_WINDOW} times in ${WINDOW_MS / 1000} s; the rest of this window's "${action}" reports are dropped — report once per user-level operation, not per element or frame`);
+            warnOnce(`flood:${action}`, `"${action}" was reported more than ${MAX_REPORTS_PER_ACTION_PER_WINDOW} times in ${WINDOW_MS / 1000} s; the rest of this window's "${action}" reports are dropped — report once per ${action === "encode" ? "try at making a file" : "user-level operation"}, not per element or frame`);
             return;
           }
           windowCounts.set(action, count + 1);
@@ -678,13 +885,16 @@
             action,
             outcome,
             ...errorType !== undefined && { errorType },
-            ...replayed && { replayed }
+            ...replayed && { replayed },
+            ...slot !== undefined && { slot }
           }
         });
       } catch {}
     };
     let readyOutcome = null;
-    const crashes = new Set;
+    const crashes = new Map;
+    let hasRecovered = false;
+    let readyListener = () => {};
     let readyTimer = null;
     let readyLeftMs = readyTimeoutMs;
     let readyArmedAt = 0;
@@ -692,11 +902,26 @@
       readyOutcome = { outcome, ...errorType !== undefined && { errorType } };
       send("ready", outcome, errorType);
     };
+    let wasLate = false;
+    const noteIfLate = () => {
+      if (env.now() - readyArmedAt - readyLeftMs >= READY_LATE_MS)
+        wasLate = true;
+    };
+    const timeoutType = () => {
+      try {
+        noteIfLate();
+        if (wasLate)
+          return "timeout_late";
+        return env.progress === undefined ? "timeout" : `timeout_${timeoutStageOf(env.progress())}`;
+      } catch {
+        return "timeout";
+      }
+    };
     const onReadyTimeout = () => {
       readyTimer = null;
       if (readyOutcome !== null)
         return;
-      settleReady("failure", crashes.size > 0 ? "threw_before_ready" : "timeout");
+      settleReady("failure", crashes.size > 0 ? "threw_before_ready" : timeoutType());
     };
     const armReadyTimer = () => {
       if (readyOutcome !== null || readyTimer !== null)
@@ -709,6 +934,7 @@
         return;
       env.clearTimeout(readyTimer);
       readyTimer = null;
+      noteIfLate();
       readyLeftMs = Math.max(READY_RESUME_FLOOR_MS, readyLeftMs - (env.now() - readyArmedAt));
     };
     try {
@@ -727,7 +953,27 @@
         armReadyTimer();
       } catch {}
     }
-    const report = (action, outcome, errorType) => {
+    const slotOf = (action, options) => {
+      if (options === undefined)
+        return;
+      let slot;
+      try {
+        slot = typeof options === "object" && options !== null && !Array.isArray(options) ? options.slot : options;
+      } catch {}
+      if (slot === undefined)
+        return;
+      if (action !== "check") {
+        warnOnce(`slot:${action}`, `report("${action}", …): only "check" takes a slot; the report was sent without one`);
+      } else if (typeof options !== "object" || options === null || Array.isArray(options)) {
+        warnOnce("slot:options", `report("check", …): the fourth argument must be a plain object such as { slot: 2 }, not a number or a list; the report was sent without a slot`);
+      } else if (typeof slot === "number" && Number.isInteger(slot) && slot >= 1 && slot <= MAX_SLOT) {
+        return slot;
+      } else {
+        warnOnce("slot:check", `report("check", …): a slot is a whole number from 1 to ${MAX_SLOT}; the report was sent without one`);
+      }
+      return;
+    };
+    const report = (action, outcome, errorType, options) => {
       if (!isCoreAction(action)) {
         warnOnce(`action:${String(action).slice(0, 32)}`, `report() dropped: "${String(action).slice(0, 32)}" is not one of the generic verbs (${CORE_ACTIONS.join(", ")})`);
         return;
@@ -740,8 +986,9 @@
         warnOnce(`outcome:${action}`, `report("${action}", …) dropped: outcome must be one of ${OUTCOMES.join(", ")}`);
         return;
       }
+      const slot = slotOf(action, options);
       if (outcome !== "failure") {
-        send(action, outcome);
+        send(action, outcome, undefined, { slot });
         return;
       }
       let type = errorType ?? "unknown";
@@ -754,7 +1001,7 @@
       } else if (!KNOWN_ERROR_TYPES.has(type)) {
         warnOnce(`errorType?:${type}`, `report("${action}", "failure", "${type}"): "${type}" is not an error type Frame's page-health route knows (choose from ERROR_TYPES: ${ERROR_TYPES.join(", ")}); it is sent and counts as a failure, but Frame files it under "invalid" until its list gains it`);
       }
-      send(action, "failure", type);
+      send(action, "failure", type, { slot });
     };
     send("load", "success");
     return {
@@ -769,13 +1016,17 @@
           readyTimer = null;
         }
         settleReady("success");
+        try {
+          readyListener();
+        } catch {}
       },
       report,
       track: runTracked(report),
-      crash(errorType) {
-        if (crashes.has(errorType))
+      crash(given) {
+        const errorType = CRASH_TYPES.includes(given) ? given : "uncaught_error";
+        if (crashes.has(crashFamily(errorType)))
           return;
-        crashes.add(errorType);
+        crashes.set(crashFamily(errorType), errorType);
         send("crash", "failure", errorType);
         if (errorType === "unsupported_browser" && readyOutcome === null) {
           if (readyTimer !== null) {
@@ -787,14 +1038,143 @@
           settleReady("failure", "unsupported_browser");
         }
       },
+      recovered() {
+        if (hasRecovered)
+          return;
+        hasRecovered = true;
+        send("crash", "failure", RECOVERED);
+      },
+      isReady: () => readyOutcome?.outcome === "success",
+      onReady(listener) {
+        readyListener = listener;
+      },
       replay() {
-        send("load", "success", undefined, true);
-        for (const type of crashes)
-          send("crash", "failure", type, true);
+        const replayed = { replayed: true };
+        send("load", "success", undefined, replayed);
+        for (const type of crashes.values())
+          send("crash", "failure", type, replayed);
+        if (hasRecovered)
+          send("crash", "failure", RECOVERED, replayed);
         if (readyOutcome !== null) {
-          send("ready", readyOutcome.outcome, readyOutcome.errorType, true);
+          send("ready", readyOutcome.outcome, readyOutcome.errorType, replayed);
         }
       }
+    };
+  }
+
+  // ../../packages/appifact-health/src/retry.ts
+  var RETRY_DELAYS_MS = [1000, 3000];
+  function mayBeTriedAgain(file, kind, page) {
+    if (!isOwnReleaseFile(page, file.href))
+      return false;
+    if (!file.script)
+      return kind === "style_own";
+    return kind === "script_own" && !file.async && file.type.trim().toLowerCase() !== "module";
+  }
+  function putAgain(doc, failed, appIsReady) {
+    const script = failed.tagName.toLowerCase() === "script";
+    if (script) {
+      const inOrder = Array.from(doc.querySelectorAll("script[src]")).filter((other) => other.async !== true);
+      if (appIsReady || doc.readyState === "loading" || inOrder.length !== 1 || inOrder[0] !== failed)
+        return null;
+    }
+    const next = doc.createElement(failed.tagName);
+    for (const attribute of Array.from(failed.attributes))
+      next.setAttribute(attribute.name, attribute.value);
+    if (script)
+      next.async = false;
+    failed.replaceWith(next);
+    return next.isConnected ? next : null;
+  }
+  var BY_HASH_ATTR = "data-frame-by-hash";
+  var AT_A_HASH = /\/_cas\/[0-9a-f]{64}\/([^?#]+)$/;
+  function putAtOwnAddress(doc, failed, wasRequested) {
+    const script = failed.tagName.toLowerCase() === "script";
+    const attributes = Array.from(failed.attributes);
+    const address = attributes.find((attribute) => attribute.name === (script ? "src" : "href"));
+    const path = AT_A_HASH.exec(address === undefined ? "" : address.value);
+    if (address === undefined || path === null || !attributes.some((attribute) => attribute.name === BY_HASH_ATTR))
+      return null;
+    const next = doc.createElement(failed.tagName);
+    for (const attribute of attributes)
+      if (attribute.name !== BY_HASH_ATTR)
+        next.setAttribute(attribute.name, attribute === address ? path[1] : attribute.value);
+    if (script && wasRequested && doc.readyState === "loading" && failed.nextSibling === null) {
+      doc.write(next.outerHTML);
+      failed.remove();
+      return next;
+    }
+    if (script)
+      next.async = false;
+    failed.replaceWith(next);
+    return next;
+  }
+  var WAIT_ATTR = "data-health-wait";
+  function waitFor(sheet, scriptTag) {
+    const copy = sheet.cloneNode();
+    copy.setAttribute(WAIT_ATTR, "");
+    if (scriptTag !== "")
+      return copy.outerHTML + scriptTag;
+    const empty = document.createElement("script");
+    empty.setAttribute("src", URL.createObjectURL(new Blob([], { type: "text/javascript" })));
+    empty.setAttribute(WAIT_ATTR, "");
+    return copy.outerHTML + empty.outerHTML;
+  }
+  function createRetries(page) {
+    const attempts = new WeakMap;
+    const seenFailing = new WeakSet;
+    const moved = new Set;
+    let open = 0;
+    let arrived = 0;
+    let lostAScript = false;
+    let told = false;
+    const check = () => {
+      if (told || arrived === 0 || open > 0 || moved.size > 0 || lostAScript || !page.appIsReady())
+        return;
+      told = true;
+      page.recovered();
+    };
+    return {
+      isTry: (file) => attempts.has(file),
+      failed(file) {
+        if (seenFailing.has(file))
+          return;
+        seenFailing.add(file);
+        const made = attempts.get(file) ?? 0;
+        if (made === 0)
+          open += 1;
+        const delay = RETRY_DELAYS_MS[made];
+        if (delay === undefined)
+          return;
+        page.setTimeout(() => {
+          let next = null;
+          try {
+            next = page.again(file);
+          } catch {}
+          if (next !== null)
+            attempts.set(next, made + 1);
+        }, delay * (1 + page.random() / 2));
+      },
+      lostAScript() {
+        lostAScript = true;
+      },
+      loaded(file) {
+        if (!attempts.delete(file))
+          return;
+        open -= 1;
+        arrived += 1;
+        check();
+      },
+      movedTo(address) {
+        moved.add(address);
+      },
+      answered(address, loaded) {
+        if (!moved.delete(address) || !loaded)
+          return;
+        arrived += 1;
+        check();
+      },
+      ready: check
     };
   }
 
@@ -836,12 +1216,24 @@
       now: () => performance.now(),
       visible: () => document.visibilityState !== "hidden",
       onVisibilityChange: (listener) => document.addEventListener("visibilitychange", listener),
+      progress,
       warn: warn2
     });
-    wireCrashes((type) => engine.crash(type));
+    wireCrashes(engine);
     wirePoke(() => engine.replay());
     installed2 = engine;
     return installed2;
+  }
+  function progress() {
+    const arrived = (href) => performance.getEntriesByName(href, "resource").length > 0;
+    const scripts = Array.from(document.querySelectorAll("script[src]")).filter((script) => AT_A_HASH.test(script.src) || isOwnReleaseFile(location, script.src));
+    const styles = Array.from(document.querySelectorAll('link[rel~="stylesheet" i]')).filter((link) => AT_A_HASH.test(link.href) || isOwnReleaseFile(location, link.href));
+    return {
+      readyState: document.readyState,
+      scripts: scripts.length,
+      scriptsAwaited: scripts.filter((script) => !arrived(script.src)).length,
+      stylesAwaited: styles.filter((link) => link.sheet === null && !arrived(link.href)).length
+    };
   }
   function inReportingContext() {
     try {
@@ -875,8 +1267,9 @@
   }
   var WATCH_ATTR = "data-frame-refused-watch";
   var UNSUPPORTED_ATTR = "data-frame-unsupported";
-  function wireCrashes(crash) {
+  function wireCrashes(engine) {
     try {
+      const crash = (type) => engine.crash(type);
       const html = document.documentElement;
       const gate = createVerdictGate(crash, {
         setTimeout: (callback, ms) => window.setTimeout(callback, ms),
@@ -889,29 +1282,122 @@
         },
         onHide: (listener) => window.addEventListener("pagehide", listener)
       });
+      const retries = createRetries({
+        setTimeout: (callback, ms) => window.setTimeout(callback, ms),
+        random: () => Math.random(),
+        again: (failed) => {
+          if (html.hasAttribute(UNSUPPORTED_ATTR))
+            return null;
+          const doc = {
+            readyState: document.readyState,
+            createElement: (tag) => document.createElement(tag),
+            querySelectorAll: (selector) => document.querySelectorAll(selector)
+          };
+          const next = putAgain(doc, failed, engine.isReady());
+          next?.addEventListener("load", () => retries.loaded(next));
+          return next;
+        },
+        appIsReady: () => engine.isReady(),
+        recovered: () => {
+          gate.waitNoLonger();
+          engine.recovered();
+        }
+      });
+      engine.onReady(() => retries.ready());
       const page = () => ({
         watched: html.hasAttribute(WATCH_ATTR),
         origin: location.origin,
         pathname: location.pathname
       });
+      const addressOf = (tag) => tag instanceof HTMLScriptElement ? tag.src : tag.href;
+      const requestEnded = (tag) => performance.getEntriesByName(addressOf(tag), "resource").length > 0;
+      const hasFailed = (link, appRan) => {
+        try {
+          return (appRan || requestEnded(link)) && !link.sheet?.cssRules.length;
+        } catch {
+          return appRan;
+        }
+      };
+      let awaitedSheet = null;
+      let writtenScript = null;
+      const moveToOwnAddress = (failed) => {
+        const doc = { readyState: document.readyState, createElement: (tag) => document.createElement(tag), write };
+        const moved = putAtOwnAddress(doc, failed, requestEnded(failed));
+        if (moved === null)
+          return false;
+        retries.movedTo(addressOf(moved));
+        if (moved instanceof HTMLLinkElement)
+          awaitedSheet = moved;
+        else if (!moved.isConnected)
+          writtenScript = moved.src;
+        return true;
+      };
+      const write = (scriptTag, appRan = false) => {
+        const marked = document.querySelector("link[" + BY_HASH_ATTR + "]");
+        if (marked !== null && AT_A_HASH.test(marked.href) && hasFailed(marked, appRan))
+          moveToOwnAddress(marked);
+        const all = awaitedSheet === null ? scriptTag : waitFor(awaitedSheet, scriptTag);
+        if (all !== "")
+          document.write(all);
+      };
+      document.addEventListener("load", (event) => {
+        try {
+          const target = event.target;
+          if (!(target instanceof HTMLScriptElement || target instanceof HTMLLinkElement) || target.hasAttribute("data-page-retries"))
+            return;
+          if (target.hasAttribute(WAIT_ATTR))
+            return target.remove();
+          if (target === awaitedSheet)
+            awaitedSheet = null;
+          retries.answered(addressOf(target), true);
+          if (target instanceof HTMLScriptElement && (target.hasAttribute(BY_HASH_ATTR) || target.src === writtenScript) && document.readyState === "loading")
+            write("", true);
+        } catch {}
+      }, true);
       window.addEventListener("error", (event) => {
         try {
           if (event instanceof ErrorEvent) {
-            if (isBenignWindowError(event.message))
+            const type = errorCrashType(event);
+            if (type === null)
               return;
-            crash(looksLikeChunkLoad(event.error) ? "chunk_load" : "uncaught_error");
+            if (type === "chunk_load_import")
+              retries.lostAScript();
+            crash(type);
             return;
           }
           const target = event.target;
-          if (target instanceof HTMLScriptElement || target instanceof HTMLLinkElement && failedLinkIsCrash(target, location.origin)) {
-            const href = target instanceof HTMLScriptElement ? target.src : target.href;
-            gate.fail(awaitsUnsupportedVerdict(page(), href));
+          if (!(target instanceof HTMLScriptElement || target instanceof HTMLLinkElement))
+            return;
+          if (target.hasAttribute("data-page-retries"))
+            return;
+          if (target.hasAttribute(WAIT_ATTR))
+            return target.remove();
+          if (moveToOwnAddress(target))
+            return;
+          if (target === awaitedSheet)
+            awaitedSheet = null;
+          retries.answered(addressOf(target), false);
+          if (retries.isTry(target)) {
+            retries.failed(target);
+            return;
           }
+          const file = target instanceof HTMLScriptElement ? { script: true, href: target.src, type: target.type, async: target.async } : { script: false, rel: target.rel, as: target.as, href: target.href };
+          const kind = failedFileKind(file, location.origin);
+          if (kind === null)
+            return;
+          gate.fail(awaitsUnsupportedVerdict(page(), file.href), kind);
+          if (mayBeTriedAgain(file, kind, page()))
+            retries.failed(target);
+          else if (file.script && !file.async && isOwnReleaseFile(page(), file.href))
+            retries.lostAScript();
         } catch {}
       }, true);
       window.addEventListener("unhandledrejection", (event) => {
         try {
-          crash(looksLikeChunkLoad(event.reason) ? "chunk_load" : "unhandled_rejection");
+          const type = rejectionCrashType(event.reason);
+          if (type === "chunk_load_import")
+            retries.lostAScript();
+          crash(type);
         } catch {}
       });
     } catch {}
@@ -945,12 +1431,13 @@
   init({ key, capabilities });
   onRuntimeMounted(() => health.ready());
 })();</script>
+<script>(()=>{function _(e=document){return e.documentElement.hasAttribute("data-frame-capture")}var K=new Uint32Array([1116352408,1899447441,3049323471,3921009573,961987163,1508970993,2453635748,2870763221,3624381080,310598401,607225278,1426881987,1925078388,2162078206,2614888103,3248222580,3835390401,4022224774,264347078,604807628,770255983,1249150122,1555081692,1996064986,2554220882,2821834349,2952996808,3210313671,3336571891,3584528711,113926993,338241895,666307205,773529912,1294757372,1396182291,1695183700,1986661051,2177026350,2456956037,2730485921,2820302411,3259730800,3345764771,3516065817,3600352804,4094571909,275423344,430227734,506948616,659060556,883997877,958139571,1322822218,1537002063,1747873779,1955562222,2024104815,2227730452,2361852424,2428436474,2756734187,3204031479,3329325298]);var te=String.fromCharCode(65533);var R=(e)=>/\.html?$/i.test(e),P="\x3C!-- frame-runtime -->",E="\x3C!-- /frame-runtime -->";function T(e){let t=e.indexOf(P);if(t<0)return e;let n=e.indexOf(E,t+P.length);return n<0?e:e.slice(0,t)+e.slice(n+E.length)}var D="__appifact_early_reads",A="_files.json",L=64,U=6;var N=(e)=>new URL(e,document.baseURI).href,I=(e)=>[...new Uint8Array(e)].map((t)=>t.toString(16).padStart(2,"0")).join("");function S(e,t,n){let o=new AbortController,r={answer:(async()=>{let s=await fetch(e,{credentials:"same-origin",priority:t,signal:o.signal});if(r.answeredAt=r.heardAt=Date.now(),(s.status===429||s.status>=500)&&t!=="low")return{status:s.status,type:""};if(s.status!==200)return;let a=[],f=s.body?.getReader();for(let c;(c=await f?.read())!==void 0&&!c.done;r.heardAt=Date.now())a.push(c.value);let d=new Uint8Array(await new Blob(a).arrayBuffer());return!o.signal.aborted&&await n(s,d)?{status:200,bytes:d,type:s.headers.get("content-type")??""}:void 0})().catch(()=>{return}).finally(()=>{r.ended=!0}),sentAt:Date.now(),heardAt:Date.now(),stop:()=>o.abort()};return r}function M(e,t){if(!R(e))return t;let n=new TextDecoder("utf-8",{ignoreBOM:!0}).decode(t),o=T(n);return o===n?t:new TextEncoder().encode(o)}function k(e,{bytes:t,paced:n}){try{let o=/\/_f\/([^/]+)\//.exec(location.pathname)?.[1],m=globalThis.__FRAME_PREAMBLE?.cred;if(o===void 0||m===void 0||_()||crypto.subtle===void 0)return;let r={reads:new Map,queued:new Map,listed:new Map,awayAt:-1/0},s=()=>{for(let[f,d]of r.queued)return r.queued.delete(f),d()},a=N(A);r.reads.set(a,S(a,"auto",(f,d)=>{let c=JSON.parse(new TextDecoder().decode(d)),u=c.files;if(f.redirected||c.ver!==o||c.narrowed===!0||u===null||typeof u!=="object"||Array.isArray(u))return!1;let y={now:t,paced:n?.bytes??0},F=Object.entries(u).map(([i,l])=>({path:i,size:typeof l?.size==="number"?l.size:1/0})),x=e(F).slice(0,L);if(x.length===0)return!1;for(let i of x){let{sha256:l,size:h}=u[i]??{},p=new URL(i.split("/").map(encodeURIComponent).join("/"),a).href,g=n?.is(i)===!0?"paced":"now";if(typeof l!=="string"||typeof h!=="number"||h>y[g]||!p.startsWith(a.slice(0,-A.length)))continue;y[g]-=h,r.listed.set(p,{path:i,sha256:l});let b=()=>{let w=S(p,g==="paced"?"low":"auto",async(H,B)=>I(await crypto.subtle.digest("SHA-256",M(i,B)))===l);return r.reads.set(p,w),w};if(g==="now")b();else r.queued.set(p,()=>void b().answer.then(s))}for(let i=0;i<U;i++)s();return!0})),document.addEventListener("visibilitychange",()=>{r.awayAt=Date.now()}),globalThis[D]=r}catch{}}var V=["project/deck.css"],v=(e)=>V.includes(e);var O="project/deck.json",j="project/slides/",z=/^[\w-]{1,64}$/;function W(e){if(!e.startsWith(j)||!e.endsWith(".html"))return;let t=e.slice(j.length,-5);return z.test(t)?t:void 0}function C(e){let t=[...e].sort((n,o)=>n.size-o.size).map((n)=>n.path);return t.includes(O)?[O,...t.filter(v),...t.filter((n)=>W(n)!==void 0)]:[]}k(C,{bytes:65536});})();</script>
 <title>Slides</title>
 <!-- README
 # Slides appifact — shared type
 
 This page is the Slides RUNTIME only: index.html + artifact-type/app.js +
-artifact-type/app.css + one icon font under artifact-type/fonts/ are one
+artifact-type/app.css + the other scripts in artifact-type/ are one
 published release of the Slides type, shared by every deck built on it, and
 artifact-type/reference/*.md are the authoring references SKILL.md points at.
 Nothing about any particular deck is in these files — not even its title.
@@ -959,10 +1446,10 @@ Nothing about any particular deck is in these files — not even its title.
 
 A deck keeps its content as its own files under project/: one
 project/slides/<sectionId>.html per slide (one <section> in the slide
-HTML format, speaker notes in its trailing <aside>), with title, order, sections, cover, typefaces and installed
-design systems in project/deck.json (artifact-type/reference/deck-files.md;
+HTML format, speaker notes in its trailing <aside>), with title, order, sections, cover, typefaces, the format and installed
+design systems in project/deck.json, and what slides share in project/deck.css (artifact-type/reference/deck-files.md;
 SKILL.md here has the shapes and an example; artifact-type/reference/format.md
-the whole subset). Images and font files live in the artifact's
+the whole format). Images and font files live in the artifact's
 asset store (/_blob/<id>), or under project/ds/<folder>/ when copied with a
 design system. Claude writes the files at creation and revises
 them by reading a file and sending the changed ones (SKILL.md); the editor
@@ -971,7 +1458,7 @@ in place. A deck with no project/deck.json is an empty deck, which is what
 this type's own page shows. Everything read from a deck is untrusted
 input, parsed by the same boundary on load.
 
-In this layout the runtime file artifact-type/app.js is what carries the compiled third-party code below.
+In this layout the scripts under artifact-type/ carry the compiled third-party code below.
 
 ## Third-party licenses
 
@@ -987,7 +1474,9 @@ This file embeds compiled copies of:
   and class-variance-authority 0.7.1 (Apache License 2.0, Joe Bell —
   full license text in THIRD_PARTY_NOTICES.md, see below)
 - pptxgenjs@3.12.0 (MIT) — https://github.com/gitbrent/PptxGenJS —
-  Copyright (c) 2015-2022 Brent Ely
+  Copyright (c) 2015-2022 Brent Ely; its source header also names: "Some
+  code derived from the OfficeGen project: github.com/Ziv-Barber/officegen/
+  (Copyright 2013 Ziv Barber)"
 - jszip@3.10.1 (MIT, of its MIT/GPL-3.0 dual license; we take the MIT
   option) — https://github.com/Stuk/jszip — Copyright (c) 2009-2016
   Stuart Knightley, David Duponchel, Franz Buchinger, António Afonso
@@ -1063,15 +1552,18 @@ anthropics/omelette repo, under appifacts/.
 <meta name="README" content="Appifact type: Slides. This page is the shared runtime; an instance’s content (title, document, comments) lives in its live store (the db capability), written with the ArtifactData tool — this page carries none, and an empty store is an empty document. Instances are created from this type and inherit its capabilities {&quot;downloads&quot;:{},&quot;artifact&quot;:{},&quot;comments&quot;:{&quot;composer_only&quot;:true,&quot;customAnchors&quot;:true},&quot;room&quot;:{},&quot;db&quot;:{&quot;rules&quot;:[{&quot;path&quot;:&quot;&quot;,&quot;write&quot;:&quot;admin&quot;},{&quot;path&quot;:&quot;notes&quot;,&quot;read&quot;:&quot;admin&quot;,&quot;write&quot;:&quot;admin&quot;}]},&quot;assets&quot;:{},&quot;user&quot;:{&quot;scopes&quot;:[&quot;profile&quot;]},&quot;mcp&quot;:{&quot;servers&quot;:[{&quot;server&quot;:&quot;Google Drive&quot;,&quot;tools&quot;:[&quot;create_file&quot;,&quot;gdrive_upload&quot;]}]}}. The README comment at the top of head has details.">
 <meta name="appifact-capabilities" content="{&quot;downloads&quot;:{},&quot;artifact&quot;:{},&quot;comments&quot;:{&quot;composer_only&quot;:true,&quot;customAnchors&quot;:true},&quot;room&quot;:{},&quot;db&quot;:{&quot;rules&quot;:[{&quot;path&quot;:&quot;&quot;,&quot;write&quot;:&quot;admin&quot;},{&quot;path&quot;:&quot;notes&quot;,&quot;read&quot;:&quot;admin&quot;,&quot;write&quot;:&quot;admin&quot;}]},&quot;assets&quot;:{},&quot;user&quot;:{&quot;scopes&quot;:[&quot;profile&quot;]},&quot;mcp&quot;:{&quot;servers&quot;:[{&quot;server&quot;:&quot;Google Drive&quot;,&quot;tools&quot;:[&quot;create_file&quot;,&quot;gdrive_upload&quot;]}]}}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>(function(){try{var l=window.top!==window&&JSON.parse(window.name).lang;if(["de-DE","es-419","es-ES","fr-FR","hi-IN","id-ID","it-IT","ja-JP","ko-KR","pt-BR"].indexOf(l)<0)return;window.__appifact_i18n={lang:l,words:fetch("artifact-type/i18n/"+l+".js",{credentials:"same-origin"}).then(function(r){return r.ok?r.json():null}).catch(function(){return null})}}catch(e){}})()</script>
+<script data-asks-first-file>try{(function(d,own){if(d.documentElement.hasAttribute("data-frame-capture")||/^Apple/.test(navigator.vendor))return;try{if(typeof JSON.parse(window.name).hot.g=="number")return}catch(e){}d.addEventListener("load",function(e){var l=e.target,a=l.rel=="stylesheet"&&l.getAttribute("href"),r;if(!a||a.slice(-21)!="artifact-type/app.css")return;r=performance.getEntriesByName(l.href).pop();if(!r||r.transferSize<r.encodedBodySize||r.responseStart-r.startTime<40)return;setTimeout(function(){if(own.taken||own.tag)return;var h=/^(.*\/)[0-9a-f]{64}\//.exec(a),t=own.tag=d.createElement("script");t.integrity="sha256-QuPcja7gHnPwGkkImEmi6llDCW89+E1itMfXZBLsGvI=";t.src=(h?h[1]+"42e3dc8daee01e73f01a49089849a2ea5943096f3df84d62b4c7d76412ec1af2/":"")+"artifact-type/editor.js";t.dataset.pageRetries="";t.onload=t.onerror=function(){own.over=1};d.head.append(t);h&&t.remove()},4*(r.responseEnd-r.responseStart)-Math.min(r.responseStart-r.startTime,300))},true)})(document,document.currentScript)}catch(e){}</script>
 <script id="appifact-mode">(function(){var h=document.documentElement;function s(){var t=h.getAttribute('data-theme');if(t==='light'||t==='dark'){h.setAttribute('data-mode',t)}else{h.removeAttribute('data-mode')}}s();if(typeof MutationObserver==='function'){new MutationObserver(s).observe(h,{attributes:true,attributeFilter:['data-theme']})}})();</script>
-<link rel="preload" as="font" type="font/woff2" href="https://fonts.frame.claudeusercontent.com/_runtime/AnthropicSans-Roman-Variable-26-179-2.542f0e8bf7a27f23.woff2" crossorigin>
-<style>@font-face{font-family:"Anthropic Sans";src:url(https://fonts.frame.claudeusercontent.com/_runtime/AnthropicSans-Roman-Variable-26-179-2.542f0e8bf7a27f23.woff2) format("woff2"),url(/_runtime/AnthropicSans-Roman-Variable-26-179-2.542f0e8bf7a27f23.woff2) format("woff2");font-weight:300 800;font-style:normal;font-display:swap;font-feature-settings:"dlig" 0}</style>
-<script>try{document.fonts.load('1em "Anthropic Sans"').catch(function(){})}catch(e){}</script>
-<link rel="stylesheet" href="artifact-type/app.css">
+<script>try{if(window.claude.hot.from!=null)document.documentElement.setAttribute("data-took-over","")}catch(e){}</script>
+<script>document.documentElement.hasAttribute("data-frame-capture")&&(document.head.appendChild(Object.assign(document.createElement("link"),{rel:"preload",as:"script",href:"artifact-type/capture.js"})),new MutationObserver(function(_,o){var s=document.querySelector('script[src="artifact-type/app.js"]');s&&(o.disconnect(),s.src="artifact-type/capture.js")}).observe(document.documentElement,{childList:true,subtree:true}),document.write('<link rel="stylesheet" href="artifact-type/capture.css">'))</script>
+<link rel="preload" as="font" type="font/woff2" href="https://fonts.frame.claudeusercontent.com/_runtime/AnthropicSansMicro-Text-Variable-26-245-1.5161b683881e7914.woff2" crossorigin>
+<style>@font-face{font-family:"Anthropic Sans";src:url(https://fonts.frame.claudeusercontent.com/_runtime/AnthropicSansMicro-Text-Variable-26-245-1.5161b683881e7914.woff2) format("woff2"),url(/_runtime/AnthropicSansMicro-Text-Variable-26-245-1.5161b683881e7914.woff2) format("woff2");font-weight:300 800;font-style:normal;font-display:swap;font-feature-settings:"dlig" 0,"ss01" 1,"ss02" 1;unicode-range:U+0-5B,U+5D-A0,U+A2-A3,U+A5-316,U+318-3C8,U+3CA-DFFF,U+E140-10FFFF}</style>
+<script>try{document.documentElement.hasAttribute("data-frame-capture")||document.fonts.load('1em "Anthropic Sans"').catch(function(){})}catch(e){}</script>
+<link rel="stylesheet" href="artifact-type/app.css" data-frame-by-hash>
 </head>
 <body>
-<script>try{if(window.claude.hot.from!=null)document.documentElement.setAttribute("data-took-over","")}catch(e){}</script>
 <div id="root"><div data-placeholder="deck" aria-hidden="true" style="position:fixed;inset:0;display:flex;flex-direction:column;pointer-events:none"><div data-rail="open" class="flex h-full min-h-0"><div class="flex min-w-0 flex-1 flex-col"><div class="relative flex min-h-0 flex-1 items-center justify-center bg-editor-canvas p-6 pt-[calc(1.5rem+var(--tb-overlay-h,0px))]"><div class="mc-shimmer aspect-video w-full max-w-3xl rounded-md"></div></div><div class="flex shrink-0 gap-6 border-t border-border-line bg-panel p-3 pl-9"><div class="mc-shimmer aspect-video shrink-0 rounded-sm" style="width:124px"></div><div class="mc-shimmer aspect-video shrink-0 rounded-sm" style="width:124px"></div><div class="mc-shimmer aspect-video shrink-0 rounded-sm" style="width:124px"></div></div></div></div><div data-rail="closed" class="flex h-full min-h-0"><div class="flex min-w-0 flex-1 flex-col"><div class="relative flex min-h-0 flex-1 items-center justify-center bg-editor-canvas p-6 pt-[calc(1.5rem+var(--tb-overlay-h,0px))]"><div class="mc-shimmer aspect-video w-full max-w-3xl rounded-md"></div></div><div class="h-[calc(3.375rem+var(--sl-safe-b,0px))] shrink-0 bg-editor-canvas pointer-coarse:h-[calc(1.875rem+40px+var(--sl-safe-b,0px))]"></div></div></div></div></div>
-<script src="artifact-type/app.js"></script>
+<script src="artifact-type/app.js" data-frame-by-hash></script>
 </body>
 </html>
