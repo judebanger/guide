@@ -4,9 +4,12 @@
 scripts/inline-shared.ts — edit the fragment, never this block. -->
 
 <!-- shared:ask-first -->
-Only with the `AskUserQuestion` tool and a person there to answer;
-otherwise (a headless run, an agent caller, "just make it") do what SKILL.md
-says: decide, build, and state your assumptions in one line.
+Ask only if a person is there to answer and no form, card or question in
+words has been answered, skipped or timed out for this request. Otherwise (that, a
+headless run, an agent caller, "just make it") ask nothing more, by any tool
+or in words, except for a file or numbers they promised, and do what SKILL.md
+says: decide, build, and state your assumptions in one line. Ask with the
+`AskUserQuestion` tool; without it, ask only what SKILL.md says to ask.
 
 Read what they gave you first. A brief that still leaves two or more
 result-changing decisions open earns ONE `AskUserQuestion` call of at most 4
@@ -35,9 +38,8 @@ Tag every call `"metadata": {"source": "artifact-questions"}`.
 
 Treat the answers as decisions and restate them in your one-line
 assumptions; whatever they leave to you, decide and say what you picked.
-One more round (at most 4 new questions) only if they ask for more (in
-chat or under "Other") or an answer opens a question you could not have
-asked before; otherwise build. Never re-ask.
+One more round (at most 4 new questions) only if they ask for more
+questions (in chat or under "Other"); otherwise build. Never re-ask.
 <!-- /shared:ask-first -->
 
 ## Questions for a canvas

@@ -20,7 +20,8 @@ Without an aesthetic, references, or a design system from the user,
 get their input before committing — ask, or sketch 2–4 genuinely
 different low-fi direction artboards they can SEE — rather than
 picking your own aesthetic (this is how you get slop). A concrete
-subject, asset or brand IS input; with nobody to ask, commit to one
+subject, asset or brand IS input; with nobody to ask, or once a question
+for this request has been answered, skipped or timed out, commit to one
 nameable direction and say so rather than ending on a question. Once
 settled, a decision stays settled. Then commit to a small system:
 
@@ -95,7 +96,7 @@ Good hi-fi designs do not start from scratch — they are rooted in
 existing design context: the user's codebase or repo, brand assets,
 screenshots of the existing product, an attached design system. Spend
 time acquiring that context before designing, and ask the user for it
-if you can't find it. Mocking a full product from scratch is a LAST
+if you can't find it and haven't asked them anything yet. Mocking a full product from scratch is a LAST
 RESORT and will lead to poor design. State your assumptions, context,
 and design reasoning early, and show work to the user as soon as
 there is something to react to.

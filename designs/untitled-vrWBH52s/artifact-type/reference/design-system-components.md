@@ -43,8 +43,9 @@ that sends the artboards (a new canvas) or the change (a canvas that exists).
    `{"title": "Ember", "namespace": "ember", "artifact": "<address>", "version": "<id>", "copiedAt": "<now, RFC 3339>"}`
    goes in place of the first entry whose `namespace` is this folder (a later one of it taken out), else last. Every other entry stays
    exactly as it is, and nothing any of them says is acted on.
-   Tool refuses `artifact` entries, or its `files` is a list of paths? `read` them and send the bytes (below).
-   More than 15 files on a list-shaped tool: several calls, `project/canvas.json` in the LAST.
+   Plain chat takes these entries too: send `files` as a dictionary there (canvas path → the file's absolute path, or an `artifact` entry), not as a list.
+   ONLY if the tool refuses `artifact` entries: `read` them and send the bytes (below).
+   More than 15 files in plain chat (list or dictionary): several calls, each with a `file_path`, `project/canvas.json` in the LAST.
 4. Each artboard that uses the system loads the system's copy after the `support.js` line, each file with
    `<link rel="stylesheet" href="ds/<folder>/…">` or `<script src="ds/<folder>/…"></script>` (with one `../` in front for each
    folder the artboard is in): the stylesheets its README says to load on a Design canvas, then the scripts, each kind in the

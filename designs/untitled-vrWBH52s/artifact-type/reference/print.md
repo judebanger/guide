@@ -3,7 +3,7 @@
 Printed work leaves through Export PDF in one of two shapes. Decide which
 BEFORE the first artboard; if the brief doesn't say and someone can
 answer, ask in plain terms ("one designed page each, or text that flows
-onto pages? what size?") — nobody to ask: documents flow, everything else
+onto pages? what size?") — nobody to ask, or asked anything already: documents flow, everything else
 is Fixed, on Letter/A4.
 
 - **Fixed pages** (`print` absent or `"fixed"`): each artboard is exactly
